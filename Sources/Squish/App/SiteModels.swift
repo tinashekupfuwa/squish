@@ -43,7 +43,14 @@ final class OptimizeModel {
     var result: ApplyResult?
     var restoreLog: [String] = []
     var error: String?
+    var isPaused = false
+    private let control = ProcessGroup()
     private var task: Task<Void, Never>?
+
+    func togglePause() {
+        if isPaused { control.resume() } else { control.pause() }
+        isPaused.toggle()
+    }
 
     func buildPlan() {
         guard !isRunning, options.audit.project != nil else { return }
@@ -56,15 +63,19 @@ final class OptimizeModel {
         error = nil
         progress = 0
         let options = options
+        let control = control
         task = Task {
             do {
-                plan = try await Optimizer.plan(options, log: { line in Task { @MainActor in self.log.append(line) } }, progress: { p in Task { @MainActor in self.progress = p } })
+                plan = try await ProcessGroup.$current.withValue(control) {
+                    try await Optimizer.plan(options, log: { line in Task { @MainActor in self.log.append(line) } }, progress: { p in Task { @MainActor in self.progress = p } })
+                }
             } catch is CancellationError {
-                log.append("Cancelled.")
+                log.append("Stopped.")
             } catch {
                 self.error = error.localizedDescription
             }
             isRunning = false
+            isPaused = false
             phase = ""
         }
     }
@@ -94,5 +105,9 @@ final class OptimizeModel {
         }
     }
 
-    func cancel() { task?.cancel() }
+    func cancel() {
+        task?.cancel()
+        control.resume()
+        isPaused = false
+    }
 }

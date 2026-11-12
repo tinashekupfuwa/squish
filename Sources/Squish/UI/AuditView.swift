@@ -35,7 +35,7 @@ struct AuditView: View {
     var body: some View {
         HStack(spacing: 0) {
             Form { SiteInputsSection(options: $model.options) }
-                .formStyle(.grouped)
+                .clearFormBackground()
                 .frame(width: 360)
                 .disabled(model.isRunning)
             Divider()
@@ -164,7 +164,7 @@ struct VideoCard: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.07)))
+        .glassCard(cornerRadius: 14)
         .textSelection(.enabled)
     }
 

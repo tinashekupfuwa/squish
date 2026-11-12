@@ -46,7 +46,10 @@ enum OutputLocation {
 
     static func directory(for input: URL) throws -> URL {
         let fm = FileManager.default
-        if usesCustomFolder, !customFolder.isEmpty {
+        if usesCustomFolder, customFolder.isEmpty {
+            throw ToolError.message("Choose a destination folder, or switch Save to back to “Next to each source”.")
+        }
+        if usesCustomFolder {
             let url = URL(fileURLWithPath: customFolder, isDirectory: true)
             try fm.createDirectory(at: url, withIntermediateDirectories: true)
             return url

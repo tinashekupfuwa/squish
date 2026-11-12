@@ -21,7 +21,17 @@ struct CompareView: View {
                 } else {
                     inputHeader
                     if model.isRunning {
-                        ProgressView(value: model.progress) { Text(model.status).font(.callout) }
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(model.isPaused ? "Paused · \(model.status)" : model.status).font(.callout)
+                                Spacer()
+                                Text("\(Int((model.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
+                            }
+                            GlowProgressBar(value: model.progress, paused: model.isPaused)
+                        }
+                        .padding(12)
+                        .glassCard()
+                        .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if let error = model.error { ErrorText(text: error) }
                     if let result = model.result {
@@ -32,18 +42,21 @@ struct CompareView: View {
                 }
                 HStack {
                     Spacer()
-                    if model.isRunning { Button("Cancel", role: .cancel) { model.cancel() } }
-                    Button(model.isRunning ? "Comparing…" : "Run comparison") {
-                        model.options.samplePositions = positions.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.map { min(max($0, 0), 100) / 100 }
-                        if model.options.samplePositions.isEmpty { model.options.samplePositions = [0.25, 0.5, 0.75] }
-                        model.start()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.input == nil || model.isRunning || !(2...8).contains(model.options.candidates.count))
+                    TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
+                                      canStart: model.input != nil && (2...8).contains(model.options.candidates.count),
+                                      startTitle: "Run comparison",
+                                      start: {
+                                          model.options.samplePositions = positions.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }.map { min(max($0, 0), 100) / 100 }
+                                          if model.options.samplePositions.isEmpty { model.options.samplePositions = [0.25, 0.5, 0.75] }
+                                          model.start()
+                                      },
+                                      togglePause: model.togglePause,
+                                      stop: model.cancel)
                 }
             }
-            .padding()
+            .padding(14)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.isRunning)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.result != nil)
         }
     }
 
@@ -95,8 +108,9 @@ struct CompareView: View {
                 Toggle("Measure PSNR too", isOn: $model.options.psnr)
                 Toggle("Show SSIM / PSNR columns", isOn: $model.showMetrics)
             }
+            DestinationSection()
         }
-        .formStyle(.grouped)
+        .clearFormBackground()
     }
 
     private var inputHeader: some View {
@@ -174,6 +188,9 @@ struct CompareView: View {
                 }
             }
         }
+        .padding(14)
+        .glassCard(cornerRadius: 16)
+        .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
     }
 
     private func thumbnail(_ image: URL, title: String, url: URL) -> some View {
@@ -183,6 +200,8 @@ struct CompareView: View {
             }
             Text(title).font(.caption)
         }
+        .padding(6)
+        .glassCard(cornerRadius: 10)
         .onTapGesture { Finder.open(url) }
         .help("Open preview")
     }

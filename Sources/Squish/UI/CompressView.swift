@@ -5,64 +5,127 @@ struct CompressView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Form { CodecSettingsSection(settings: $model.settings) }
-                .formStyle(.grouped)
-                .frame(width: 350)
-                .disabled(model.isRunning)
+            Form {
+                CodecSettingsSection(settings: $model.settings)
+                DestinationSection()
+            }
+            .clearFormBackground()
+            .frame(width: 340)
+            .disabled(model.isRunning)
             Divider()
             VStack(spacing: 12) {
-                DropZone(title: "Drop videos or folders", subtitle: "Each video becomes a VP9 WebM and an H.265 MP4 by default", onDrop: model.add) {
-                    model.add(Panels.chooseVideos())
+                DropZone(title: "Add videos or folders", subtitle: "Videos wait in the queue until you press Start", onDrop: { urls in withAnimation(.spring) { model.add(urls) } }) {
+                    let urls = Panels.chooseVideos()
+                    withAnimation(.spring) { model.add(urls) }
                 }
                 if model.jobs.isEmpty {
                     Spacer()
-                    Text("Outputs are verified with FFprobe and a full decode, then shown here with their savings and the exact commands used.")
-                        .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 420)
+                    VStack(spacing: 8) {
+                        Image(systemName: "tray").font(.system(size: 30)).foregroundStyle(.tertiary)
+                        Text("The queue is empty").font(.headline).foregroundStyle(.secondary)
+                        Text("Each video becomes a VP9 WebM and an H.265 MP4 by default, checked with FFprobe and a full decode.")
+                            .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+                    }
+                    .transition(.opacity)
                     Spacer()
                 } else {
-                    List {
-                        ForEach(model.jobs) { job in
-                            JobRow(job: job) { model.remove(job) }
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(model.jobs) { job in
+                                JobRow(job: job, paused: model.isPaused && job.state == .running) {
+                                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { model.remove(job) }
+                                }
+                                .transition(.card)
+                            }
                         }
+                        .padding(.vertical, 2)
                     }
-                    .listStyle(.inset)
+                    .scrollContentBackground(.hidden)
                 }
-                HStack {
-                    Button("Clear finished") { model.clearFinished() }.disabled(!model.jobs.contains { $0.state == .done })
-                    Spacer()
-                    if model.isRunning { Button("Cancel", role: .cancel) { model.cancel() } }
-                    Button(model.isRunning ? "Compressing…" : "Compress \(model.pending.count) video\(model.pending.count == 1 ? "" : "s")") { model.start() }
-                        .keyboardShortcut(.defaultAction)
-                        .buttonStyle(.borderedProminent)
-                        .disabled(model.isRunning || model.pending.isEmpty || model.settings.enabledCodecs.isEmpty)
-                }
+                controlBar
             }
-            .padding()
+            .padding(14)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.jobs.map(\.id))
         }
+    }
+
+    private var controlBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(summary).font(.callout.weight(.medium)).contentTransition(.numericText())
+                    Spacer()
+                    if model.isRunning || model.overallProgress > 0 {
+                        Text("\(Int((model.overallProgress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
+                    }
+                }
+                GlowProgressBar(value: model.overallProgress, paused: model.isPaused, height: 8)
+            }
+            Menu {
+                Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
+                Button("Clear all", role: .destructive) { withAnimation(.spring) { model.jobs.removeAll { $0.state != .running } } }.disabled(model.jobs.isEmpty)
+            } label: { Image(systemName: "ellipsis") }
+            .menuStyle(.button)
+            .glassButton()
+            .fixedSize()
+            TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
+                              canStart: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty,
+                              startTitle: "Start",
+                              start: model.start,
+                              togglePause: { model.isPaused ? model.resume() : model.pause() },
+                              stop: model.stop)
+        }
+        .padding(12)
+        .glassCard(cornerRadius: 18)
+        .animation(.easeInOut(duration: 0.25), value: model.overallProgress)
+    }
+
+    private var summary: String {
+        let done = model.jobs.filter { $0.state == .done }.count
+        let queued = model.pending.count
+        if model.isPaused { return "Paused · \(done) of \(model.jobs.count) done" }
+        if model.isRunning { return "Converting · \(done) of \(model.jobs.count) done" }
+        if model.jobs.isEmpty { return "No videos queued" }
+        return queued == 0 ? "All \(done) done" : "\(queued) ready to convert" + (done > 0 ? " · \(done) done" : "")
     }
 }
 
 struct JobRow: View {
     let job: CompressJob
+    let paused: Bool
     let onRemove: () -> Void
     @State private var expanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Image(systemName: icon).foregroundStyle(color)
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.title3)
+                    .foregroundStyle(color)
+                    .contentTransition(.symbolEffect(.replace))
+                    .symbolEffect(.pulse, isActive: job.state == .running && !paused)
+                    .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(job.url.lastPathComponent).font(.headline).lineLimit(1).truncationMode(.middle)
-                    if let probe = job.probe { Text(probe.summary).font(.caption).foregroundStyle(.secondary) }
+                    if let probe = job.probe { Text(probe.summary).font(.caption).foregroundStyle(.secondary).transition(.opacity) }
                 }
                 Spacer()
-                Text(job.status).font(.caption).foregroundStyle(.secondary)
+                Text(paused ? "Paused" : job.status).font(.caption).foregroundStyle(.secondary).contentTransition(.opacity)
                 if job.state != .running {
-                    Button(action: onRemove) { Image(systemName: "xmark") }.buttonStyle(.borderless)
+                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
+                        .buttonStyle(.borderless).help("Remove from queue")
                 }
             }
-            if job.state == .running { ProgressView(value: job.progress) }
-            if let error = job.error { ErrorText(text: error) }
+            if job.state == .running {
+                HStack(spacing: 10) {
+                    GlowProgressBar(value: job.progress, paused: paused)
+                    Text("\(Int((job.progress * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36, alignment: .trailing)
+                        .contentTransition(.numericText())
+                }
+                .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .leading)))
+            }
+            if let error = job.error { ErrorText(text: error).transition(.opacity) }
             if let note = job.audioNote { Label(note, systemImage: "speaker.wave.2").font(.caption).foregroundStyle(.secondary) }
             ForEach(job.notes, id: \.self) { Label($0, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
             if !job.outputs.isEmpty {
@@ -79,10 +142,11 @@ struct JobRow: View {
                                 .help((output.verification.checks + output.verification.issues).joined(separator: "\n"))
                             Button("Show") { Finder.reveal([output.url]) }.buttonStyle(.link)
                         }
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
                     }
                 }
                 .font(.callout)
-                DisclosureGroup("Commands, verification, and HTML", isExpanded: $expanded) {
+                DisclosureGroup("Commands, verification, and HTML", isExpanded: $expanded.animation(.spring(response: 0.35))) {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(job.outputs) { output in
                             Text("\(output.codec.label): \(output.verification.checks.joined(separator: ", "))\(output.verification.issues.isEmpty ? "" : " — issues: " + output.verification.issues.joined(separator: "; "))")
@@ -99,13 +163,17 @@ struct JobRow: View {
                 .font(.callout)
             }
         }
-        .padding(.vertical, 6)
+        .padding(12)
+        .glassCard(cornerRadius: 14, tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.state)
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.outputs.count)
     }
 
     private var icon: String {
+        if paused { return "pause.circle.fill" }
         switch job.state {
         case .queued: return "clock"
-        case .running: return "gearshape.2"
+        case .running: return "gearshape.2.fill"
         case .done: return "checkmark.circle.fill"
         case .failed: return "xmark.circle.fill"
         case .cancelled: return "stop.circle"
@@ -113,6 +181,7 @@ struct JobRow: View {
     }
 
     private var color: Color {
+        if paused { return .orange }
         switch job.state {
         case .done: return .green
         case .failed: return .red

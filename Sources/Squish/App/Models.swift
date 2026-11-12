@@ -25,6 +25,8 @@ final class CompressModel {
     var jobs: [CompressJob] = []
     var settings = EncodeSettings()
     var isRunning = false
+    var isPaused = false
+    private let control = ProcessGroup()
     private var task: Task<Void, Never>?
 
     static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "webm", "mkv", "avi", "ogv", "mpg", "mpeg", "mts", "m2ts", "wmv", "flv", "3gp", "gif"]
@@ -53,20 +55,50 @@ final class CompressModel {
 
     var pending: [CompressJob] { jobs.filter { $0.state != .done && $0.state != .running } }
 
+    /// Progress across the jobs that are queued, running, or finished.
+    var overallProgress: Double {
+        let active = jobs.filter { $0.state != .failed && $0.state != .cancelled }
+        guard !active.isEmpty else { return 0 }
+        return active.reduce(0) { $0 + ($1.state == .done ? 1 : $1.progress) } / Double(active.count)
+    }
+
     func start() {
         guard !isRunning, !pending.isEmpty else { return }
+        for job in pending { job.state = .queued; job.status = "Queued"; job.progress = 0 }
         isRunning = true
+        isPaused = false
         let settings = settings
+        let control = control
         task = Task {
-            for job in pending {
-                if Task.isCancelled { break }
-                await process(job, settings)
+            await ProcessGroup.$current.withValue(control) {
+                while !Task.isCancelled, let job = jobs.first(where: { $0.state == .queued }) {
+                    try? await control.waitWhilePaused()
+                    if Task.isCancelled { break }
+                    await process(job, settings)
+                }
             }
             isRunning = false
+            isPaused = false
         }
     }
 
-    func cancel() { task?.cancel() }
+    func pause() {
+        guard isRunning, !isPaused else { return }
+        control.pause()
+        isPaused = true
+    }
+
+    func resume() {
+        guard isPaused else { return }
+        control.resume()
+        isPaused = false
+    }
+
+    func stop() {
+        task?.cancel()
+        control.resume()
+        isPaused = false
+    }
 
     private func process(_ job: CompressJob, _ s: EncodeSettings) async {
         job.state = .running
@@ -128,6 +160,8 @@ final class CompareModel {
     var result: CompareResult?
     var error: String?
     var showMetrics = false
+    var isPaused = false
+    private let control = ProcessGroup()
     private var task: Task<Void, Never>?
 
     func setInput(_ url: URL) {
@@ -144,19 +178,32 @@ final class CompareModel {
         error = nil
         result = nil
         let options = options
+        let control = control
         task = Task {
             do {
-                result = try await CompareEngine.run(input: input, options: options) { text, p in
-                    Task { @MainActor in self.status = text; self.progress = p }
+                result = try await ProcessGroup.$current.withValue(control) {
+                    try await CompareEngine.run(input: input, options: options) { text, p in
+                        Task { @MainActor in self.status = text; self.progress = p }
+                    }
                 }
             } catch is CancellationError {
-                status = "Cancelled"
+                status = "Stopped"
             } catch {
-                self.error = error.localizedDescription
+                self.error = Task.isCancelled ? nil : error.localizedDescription
             }
             isRunning = false
+            isPaused = false
         }
     }
 
-    func cancel() { task?.cancel() }
+    func togglePause() {
+        if isPaused { control.resume() } else { control.pause() }
+        isPaused.toggle()
+    }
+
+    func cancel() {
+        task?.cancel()
+        control.resume()
+        isPaused = false
+    }
 }

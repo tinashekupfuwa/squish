@@ -37,20 +37,30 @@ struct DropZone: View {
     @State private var targeted = false
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "film.stack").font(.system(size: 30)).foregroundStyle(.secondary)
-            Text(title).font(.headline)
-            Text(subtitle).font(.caption).foregroundStyle(.secondary)
-            Button("Choose…", action: onChoose)
+        HStack(spacing: 14) {
+            Image(systemName: targeted ? "film.stack.fill" : "film.stack")
+                .font(.system(size: 28))
+                .foregroundStyle(targeted ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: targeted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.headline)
+                Text(subtitle).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Choose…", action: onChoose).glassButton()
         }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
+        .glassCard(cornerRadius: 16, tint: targeted ? .accentColor : nil)
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
-                .foregroundStyle(targeted ? Color.accentColor : Color.secondary.opacity(0.5))
-                .background(RoundedRectangle(cornerRadius: 12).fill(targeted ? Color.accentColor.opacity(0.08) : Color.clear))
+                .foregroundStyle(targeted ? Color.accentColor : Color.secondary.opacity(0.35))
         )
+        .scaleEffect(targeted ? 1.015 : 1)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: targeted)
         .dropDestination(for: URL.self) { urls, _ in
             onDrop(urls)
             return !urls.isEmpty
@@ -146,8 +156,8 @@ struct LogView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(8)
             }
-            .frame(minHeight: 80, maxHeight: 160)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.08)))
+            .frame(minHeight: 70, maxHeight: 140)
+            .glassCard(cornerRadius: 10)
             .onChange(of: lines.count) { _, count in proxy.scrollTo(count - 1, anchor: .bottom) }
         }
     }

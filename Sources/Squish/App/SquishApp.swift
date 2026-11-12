@@ -9,8 +9,11 @@ struct SquishApp: App {
         WindowGroup("Squish") {
             ContentView()
                 .environment(state)
-                .frame(minWidth: 1060, minHeight: 700)
+                .frame(minWidth: 940, minHeight: 500)
+                .modifier(WindowGlass())
         }
+        .defaultSize(width: 1120, height: 620)
+        .windowToolbarStyle(.unified(showsTitle: true))
         .commands { CommandGroup(replacing: .newItem) {} }
         Settings { SettingsView() }
     }
@@ -69,7 +72,7 @@ struct ContentView: View {
     var body: some View {
         @Bindable var state = state
         NavigationSplitView {
-            List(selection: $state.section) {
+            List(selection: Binding(get: { state.section }, set: { value in withAnimation(.smooth(duration: 0.3)) { state.section = value } })) {
                 ForEach(AppSection.allCases) { section in
                     Label {
                         VStack(alignment: .leading, spacing: 1) {
@@ -83,6 +86,8 @@ struct ContentView: View {
                     .tag(section)
                 }
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
         } detail: {
             VStack(spacing: 0) {
@@ -96,14 +101,31 @@ struct ContentView: View {
                     .padding(10)
                     .background(.orange.opacity(0.12))
                 }
-                switch state.section ?? .compress {
-                case .compress: CompressView(model: state.compress)
-                case .compare: CompareView(model: state.compare, compress: state.compress, select: { state.section = $0 })
-                case .audit: AuditView(model: state.audit, optimize: state.optimize, select: { state.section = $0 })
-                case .optimize: OptimizeView(model: state.optimize)
+                Group {
+                    switch state.section ?? .compress {
+                    case .compress: CompressView(model: state.compress)
+                    case .compare: CompareView(model: state.compare, compress: state.compress, select: { s in withAnimation(.smooth) { state.section = s } })
+                    case .audit: AuditView(model: state.audit, optimize: state.optimize, select: { s in withAnimation(.smooth) { state.section = s } })
+                    case .optimize: OptimizeView(model: state.optimize)
+                    }
                 }
+                .id(state.section)
+                .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 8)), removal: .opacity))
             }
             .navigationTitle((state.section ?? .compress).title)
+        }
+    }
+}
+
+/// Translucent window background so the desktop glows through behind the glass.
+struct WindowGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 15, *) {
+            content
+                .containerBackground(.ultraThinMaterial, for: .window)
+                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        } else {
+            content.background(.ultraThinMaterial)
         }
     }
 }

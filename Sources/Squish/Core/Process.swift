@@ -75,6 +75,46 @@ final class LineBuffer: @unchecked Sendable {
     }
 }
 
+/// Tracks the processes a workflow launches so it can pause (SIGSTOP) and resume (SIGCONT) them.
+final class ProcessGroup: @unchecked Sendable {
+    @TaskLocal static var current: ProcessGroup?
+
+    private let lock = NSLock()
+    private var pids: Set<pid_t> = []
+    private var paused = false
+
+    var isPaused: Bool { lock.lock(); defer { lock.unlock() }; return paused }
+
+    func register(_ pid: pid_t) {
+        lock.lock(); defer { lock.unlock() }
+        pids.insert(pid)
+        if paused { kill(pid, SIGSTOP) }
+    }
+
+    func unregister(_ pid: pid_t) {
+        lock.lock(); defer { lock.unlock() }
+        pids.remove(pid)
+    }
+
+    func pause() {
+        lock.lock(); defer { lock.unlock() }
+        paused = true
+        for pid in pids { kill(pid, SIGSTOP) }
+    }
+
+    func resume() {
+        lock.lock(); defer { lock.unlock() }
+        paused = false
+        for pid in pids { kill(pid, SIGCONT) }
+    }
+
+    func waitWhilePaused() async throws {
+        while isPaused {
+            try await Task.sleep(nanoseconds: 200_000_000)
+        }
+    }
+}
+
 struct RunResult: Sendable {
     let status: Int32
     let stdout: String
@@ -99,6 +139,8 @@ enum Runner {
         process.standardError = errPipe
         let outBuffer = LineBuffer(keep: keepStdout, onLine: onStdoutLine)
         let errBuffer = LineBuffer(keep: true, onLine: onStderrLine)
+        let group = ProcessGroup.current
+        try await group?.waitWhilePaused()
         outPipe.fileHandleForReading.readabilityHandler = { handle in
             let chunk = handle.availableData
             if !chunk.isEmpty { outBuffer.append(chunk) }
@@ -110,6 +152,7 @@ enum Runner {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RunResult, Error>) in
                 process.terminationHandler = { finished in
+                    group?.unregister(finished.processIdentifier)
                     outPipe.fileHandleForReading.readabilityHandler = nil
                     errPipe.fileHandleForReading.readabilityHandler = nil
                     let restOut = outPipe.fileHandleForReading.readDataToEndOfFile()
@@ -120,7 +163,11 @@ enum Runner {
                 }
                 do {
                     try process.run()
-                    if Task.isCancelled { process.terminate() }
+                    group?.register(process.processIdentifier)
+                    if Task.isCancelled {
+                        process.terminate()
+                        kill(process.processIdentifier, SIGCONT)
+                    }
                 } catch {
                     outPipe.fileHandleForReading.readabilityHandler = nil
                     errPipe.fileHandleForReading.readabilityHandler = nil
@@ -128,7 +175,10 @@ enum Runner {
                 }
             }
         } onCancel: {
-            if process.isRunning { process.terminate() }
+            if process.isRunning {
+                process.terminate()
+                kill(process.processIdentifier, SIGCONT)
+            }
         }
     }
 

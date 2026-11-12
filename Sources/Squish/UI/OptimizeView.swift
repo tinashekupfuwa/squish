@@ -15,8 +15,8 @@ struct OptimizeView: View {
                     Toggle("Drop audio when every player is muted without controls", isOn: $model.options.removeAudioWhenMutedWithoutControls)
                 }
             }
-            .formStyle(.grouped)
-            .frame(width: 370)
+            .clearFormBackground()
+            .frame(width: 360)
             .disabled(model.isRunning)
             Divider()
             VStack(alignment: .leading, spacing: 12) {
@@ -42,24 +42,37 @@ struct OptimizeView: View {
                 }
                 if let error = model.error { ErrorText(text: error) }
                 if model.isRunning {
-                    ProgressView(value: model.progress) { Text(model.phase).font(.callout) }
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(model.isPaused ? "Paused · \(model.phase)" : model.phase).font(.callout)
+                            Spacer()
+                            Text("\(Int((model.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
+                        }
+                        GlowProgressBar(value: model.progress, paused: model.isPaused)
+                    }
+                    .padding(12)
+                    .glassCard()
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
                 if !model.log.isEmpty, model.isRunning || (model.plan == nil && model.result == nil) { LogView(lines: model.log) }
                 HStack {
                     Spacer()
-                    if model.isRunning { Button("Cancel", role: .cancel) { model.cancel() } }
-                    if let plan = model.plan, model.result == nil, plan.hasWork {
+                    if let plan = model.plan, model.result == nil, plan.hasWork, !model.isRunning {
                         Button("Apply \(plan.changes.count + plan.edits.count) changes") { model.apply() }
-                            .buttonStyle(.borderedProminent)
-                            .disabled(model.isRunning)
+                            .glassButton(prominent: true)
+                            .transition(.scale.combined(with: .opacity))
                     }
-                    Button(model.plan == nil ? "Scan & build plan" : "Rebuild plan") { model.buildPlan() }
-                        .buttonStyle(.bordered)
-                        .keyboardShortcut(model.plan == nil ? .defaultAction : .init("r"))
-                        .disabled(model.isRunning || model.options.audit.project == nil || model.options.encode.enabledCodecs.isEmpty)
+                    TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
+                                      canStart: model.options.audit.project != nil && !model.options.encode.enabledCodecs.isEmpty,
+                                      startTitle: model.plan == nil ? "Scan & build plan" : "Rebuild plan",
+                                      start: model.buildPlan,
+                                      togglePause: model.togglePause,
+                                      stop: model.cancel)
                 }
             }
-            .padding()
+            .padding(14)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.isRunning)
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: model.plan != nil)
         }
     }
 }
@@ -108,7 +121,7 @@ struct PlanView: View {
                         ForEach(video.notes, id: \.self) { Label($0, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.secondary.opacity(0.07)))
+                    .glassCard(cornerRadius: 14)
                 }
                 if !plan.edits.isEmpty {
                     Text("Source edits").font(.headline)
@@ -123,7 +136,7 @@ struct PlanView: View {
                             }
                         }
                         .padding(8)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.07)))
+                        .glassCard(cornerRadius: 10)
                         .textSelection(.enabled)
                     }
                 }
