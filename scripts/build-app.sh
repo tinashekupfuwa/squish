@@ -3,8 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)/Squish"
+swift build -c release --arch arm64 --arch x86_64
+BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/Squish"
 APP="dist/Squish.app"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
@@ -47,6 +47,11 @@ PLIST
 
 codesign --force --deep --sign - "$APP"
 echo "Built $APP"
+
+if [[ "${1:-}" == "--zip" ]]; then
+  ditto -c -k --sequesterRsrc --keepParent "$APP" dist/Squish.zip
+  echo "Packaged dist/Squish.zip"
+fi
 
 if [[ "${1:-}" == "--install" ]]; then
   mkdir -p ~/Applications
