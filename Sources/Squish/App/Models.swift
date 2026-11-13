@@ -190,9 +190,11 @@ final class CompressModel {
         for job in pending { job.state = .queued; job.status = "Queued"; job.progress = 0 }
         isRunning = true
         isPaused = false
+        StayAwake.begin()
         let settings = settings
         let control = control
         task = Task {
+            defer { StayAwake.end() }
             await ProcessGroup.$current.withValue(control) {
                 while !Task.isCancelled, let job = jobs.first(where: { $0.state == .queued }) {
                     try? await control.waitWhilePaused()
@@ -322,9 +324,11 @@ final class CompareModel {
         isRunning = true
         error = nil
         result = nil
+        StayAwake.begin()
         let options = options
         let control = control
         task = Task {
+            defer { StayAwake.end() }
             do {
                 result = try await ProcessGroup.$current.withValue(control) {
                     try await CompareEngine.run(input: input, options: options) { text, p in

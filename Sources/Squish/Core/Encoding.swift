@@ -338,7 +338,8 @@ enum Encoder {
         if let v = known(probe.colorTransfer) { params.append("transfer=\(v)") }
         if let v = known(probe.colorSpace) { params.append("colormatrix=\(v)") }
         if known(probe.colorRange) != nil { params.append("range=\(probe.colorRange == "pc" || probe.colorRange == "jpeg" ? "full" : "limited")") }
-        if !params.isEmpty { flags += ["-x265-params", params.joined(separator: ":")] }
+        params.append("pools=+")
+        flags += ["-x265-params", params.joined(separator: ":")]
         return flags
     }
 

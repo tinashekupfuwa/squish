@@ -50,6 +50,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Keep running in the menu bar after the window closes.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
+    /// A running conversion keeps the Mac from sleeping, and from shutting down out from under it.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        StayAwake.isHeld ? .terminateCancel : .terminateNow
+    }
+
     /// Files dropped on the Dock icon or opened with Squish join the queue.
     func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated { AppState.shared.receive(urls, fromWindow: false) }

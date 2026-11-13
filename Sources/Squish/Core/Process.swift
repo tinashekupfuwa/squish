@@ -1,4 +1,49 @@
 import Foundation
+import IOKit.pwr_mgt
+
+/// Holds the Mac awake and unsleeping while a conversion is running, and asks for user-initiated CPU time.
+enum StayAwake {
+    private static let lock = NSLock()
+    private static var holders = 0
+    private static var endActivity: (() -> Void)?
+    private static var assertions: [IOPMAssertionID] = []
+
+    static var isHeld: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return holders > 0
+    }
+
+    static func begin() {
+        lock.lock()
+        defer { lock.unlock() }
+        holders += 1
+        guard holders == 1 else { return }
+        let token = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled, .idleDisplaySleepDisabled, .suddenTerminationDisabled, .automaticTerminationDisabled],
+            reason: "Squish is converting video"
+        )
+        endActivity = { ProcessInfo.processInfo.endActivity(token) }
+        let name = "Squish is converting video" as CFString
+        for kind in [kIOPMAssertionTypePreventUserIdleSystemSleep, kIOPMAssertionTypePreventSystemSleep] {
+            var id: IOPMAssertionID = 0
+            if IOPMAssertionCreateWithName(kind as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), name, &id) == kIOReturnSuccess {
+                assertions.append(id)
+            }
+        }
+    }
+
+    static func end() {
+        lock.lock()
+        defer { lock.unlock() }
+        holders = max(0, holders - 1)
+        guard holders == 0 else { return }
+        endActivity?()
+        endActivity = nil
+        for id in assertions { IOPMAssertionRelease(id) }
+        assertions.removeAll()
+    }
+}
 
 enum ToolError: LocalizedError {
     case notFound(String)
@@ -162,6 +207,7 @@ enum Runner {
                     continuation.resume(returning: RunResult(status: finished.terminationStatus, stdout: outBuffer.finish(), stderr: errBuffer.finish()))
                 }
                 do {
+                    process.qualityOfService = .userInitiated
                     try process.run()
                     group?.register(process.processIdentifier)
                     if Task.isCancelled {

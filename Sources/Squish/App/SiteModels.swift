@@ -55,6 +55,7 @@ final class OptimizeModel {
     func buildPlan() {
         guard !isRunning, options.audit.project != nil else { return }
         isRunning = true
+        StayAwake.begin()
         phase = "Scanning and encoding"
         log = []
         plan = nil
@@ -65,6 +66,7 @@ final class OptimizeModel {
         let options = options
         let control = control
         task = Task {
+            defer { StayAwake.end() }
             do {
                 plan = try await ProcessGroup.$current.withValue(control) {
                     try await Optimizer.plan(options, log: { line in Task { @MainActor in self.log.append(line) } }, progress: { p in Task { @MainActor in self.progress = p } })

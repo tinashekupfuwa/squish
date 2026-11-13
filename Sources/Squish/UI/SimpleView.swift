@@ -28,6 +28,11 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
+            if model.isRunning {
+                Text("This Mac stays awake until the conversion finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             if model.hasLargeVideo {
                 TickBar(value: finished ? 1 : model.displayProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 30)
             } else {
