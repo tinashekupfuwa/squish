@@ -252,6 +252,9 @@ final class CompressModel {
                 let sampling = probe.pixFmt.contains("444") ? "4:4:4" : "4:2:2"
                 job.notes.append(kept.contains("422") || kept.contains("444") ? "Color sampling kept at \(sampling). Some phones only play 4:2:0" : "Color reduced to 4:2:0 so browsers can play it")
             }
+            if s.speed == .hardware {
+                job.notes.append(probe.pixFmt.contains("444") ? "Media Engine can't keep 4:4:4, so this one uses the standard encoder" : "Encoded on the Media Engine. Faster, and the file is larger than Standard for the same look")
+            }
             if audio.keep {
                 job.notes.append(s.losslessAudio ? "Audio saved lossless (ALAC), every channel kept" : "Audio saved as AAC, 128 kb/s per channel")
             }
@@ -272,7 +275,7 @@ final class CompressModel {
                     Task { @MainActor in job.progress = (Double(i) + p * 0.95) / count }
                 }
                 job.status = "Verifying \(codec.shortLabel)…"
-                let verification = try await Encoder.verify(output: output, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: s.frameRate), pixFmt: s.pixFmt(for: codec, source: probe), audio: audio.keep)
+                let verification = try await Encoder.verify(output: output, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: s.frameRate), pixFmt: s.expectedPixFmt(for: codec, source: probe), audio: audio.keep)
                 job.outputs.append(EncodeOutput(codec: codec, crf: s.crf(for: codec), url: output, bytes: verification.probe.bytes, sourceBytes: probe.bytes, command: command, verification: verification))
             }
             job.html = Encoder.htmlSnippet(job.outputs)

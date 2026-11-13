@@ -52,6 +52,12 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
             return ["-c:v", "libsvtav1", "-b:v", "0", "-crf", "\(crf)", "-preset", "6", "-pix_fmt", pixFmt]
         case (.av1, .faster):
             return ["-c:v", "libsvtav1", "-b:v", "0", "-crf", "\(crf)", "-preset", "8", "-pix_fmt", pixFmt]
+        case (.h265, .hardware):
+            let profile = pixFmt == "p210le" ? "main42210" : pixFmt == "p010le" ? "main10" : "main"
+            let quality = min(100, max(1, Int((50 + Double(38 - crf) / 0.16 * 0.35).rounded())))
+            return ["-c:v", "hevc_videotoolbox", "-profile:v", profile, "-q:v", "\(quality)", "-allow_sw", "0", "-prio_speed", "0", "-tag:v", "hvc1", "-movflags", "faststart", "-pix_fmt", pixFmt]
+        case (_, .hardware):
+            return videoFlags(crf: crf, pixFmt: pixFmt, speed: .faster)
         }
     }
 
@@ -98,9 +104,22 @@ enum FrameRateMode: String, CaseIterable, Identifiable, Codable, Sendable {
 }
 
 enum SpeedMode: String, CaseIterable, Identifiable, Codable, Sendable {
-    case skill, faster
+    case skill, faster, hardware
     var id: String { rawValue }
-    var label: String { self == .skill ? "Extra compression (much slower)" : "Standard" }
+    var label: String {
+        switch self {
+        case .skill: return "Extra compression (much slower)"
+        case .faster: return "Standard"
+        case .hardware: return "Media Engine (much faster)"
+        }
+    }
+    var shortLabel: String {
+        switch self {
+        case .skill: return "Extra"
+        case .faster: return "Standard"
+        case .hardware: return "Media Engine"
+        }
+    }
 }
 
 struct EncodeSettings: Codable, Equatable, Sendable {
@@ -126,7 +145,8 @@ struct EncodeSettings: Codable, Equatable, Sendable {
         }
         var size = maxWidth.map { "\($0) px wide" } ?? "original size"
         if frameRate == .cap { size += ", 30 fps max" }
-        return "\(formats) · \(sound) · \(size)"
+        let engine = speed == .hardware ? " · Media Engine" : ""
+        return "\(formats)\(engine) · \(sound) · \(size)"
     }
 
     init() {}
@@ -144,11 +164,26 @@ struct EncodeSettings: Codable, Equatable, Sendable {
 
     /// H.265 keeps the source chroma (a Ninja 4:2:2 master stays 4:2:2). VP9 and AV1 are 4:2:0, which is what browsers play.
     func pixFmt(for codec: Codec, source: ProbeInfo) -> String {
+        if codec == .h265 && speed == .hardware && !source.pixFmt.contains("444") {
+            if source.pixFmt.contains("422") { return tenBit ? "p210le" : "nv12" }
+            return tenBit ? "p010le" : "nv12"
+        }
         let sub: String
         if codec == .h265 && source.pixFmt.contains("444") { sub = "444" }
         else if codec == .h265 && source.pixFmt.contains("422") { sub = "422" }
         else { sub = "420" }
         return tenBit ? "yuv\(sub)p10le" : "yuv\(sub)p"
+    }
+
+    /// What ffprobe should report. Hardware encodes are tagged with the software name of the same sampling.
+    func expectedPixFmt(for codec: Codec, source: ProbeInfo) -> String {
+        let requested = pixFmt(for: codec, source: source)
+        switch requested {
+        case "p210le": return "yuv422p10le"
+        case "p010le": return "yuv420p10le"
+        case "nv12": return "yuv420p"
+        default: return requested
+        }
     }
 
     enum CodingKeys: String, CodingKey {
@@ -273,9 +308,12 @@ enum Encoder {
     }
 
     static func arguments(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL) -> [String] {
-        var args = ["-hide_banner", "-nostdin", "-n", "-i", input, "-map", "0:v:0"]
+        let hardware = settings.speed == .hardware && codec == .h265 && !probe.pixFmt.contains("444")
+        var args = ["-hide_banner", "-nostdin"]
+        if hardware { args += ["-hwaccel", "videotoolbox"] }
+        args += ["-n", "-i", input, "-map", "0:v:0"]
         args += codec.videoFlags(crf: crf, pixFmt: settings.pixFmt(for: codec, source: probe), speed: settings.speed)
-        args += colorFlags(probe, codec: codec)
+        args += colorFlags(probe, codec: codec, hardware: hardware)
         let chain = Filters.chain(probe, maxWidth: maxWidth, frameRate: settings.frameRate)
         if !chain.isEmpty { args += ["-vf", chain] }
         args += codec.audioFlags(keep: keepAudio, streams: probe.audio, lossless: settings.losslessAudio)
@@ -284,7 +322,7 @@ enum Encoder {
     }
 
     /// libx265 drops container color tags unless they are also passed as encoder params, so both are set.
-    private static func colorFlags(_ probe: ProbeInfo, codec: Codec) -> [String] {
+    private static func colorFlags(_ probe: ProbeInfo, codec: Codec, hardware: Bool) -> [String] {
         func known(_ value: String) -> String? {
             let v = value.lowercased()
             return v.isEmpty || v == "unknown" || v == "unspecified" ? nil : v
@@ -294,7 +332,7 @@ enum Encoder {
         if let v = known(probe.colorTransfer) { flags += ["-color_trc", v] }
         if let v = known(probe.colorSpace) { flags += ["-colorspace", v] }
         if let v = known(probe.colorRange) { flags += ["-color_range", v == "pc" || v == "jpeg" ? "pc" : "tv"] }
-        guard codec == .h265 else { return flags }
+        guard codec == .h265, !hardware else { return flags }
         var params: [String] = []
         if let v = known(probe.colorPrimaries) { params.append("colorprim=\(v)") }
         if let v = known(probe.colorTransfer) { params.append("transfer=\(v)") }

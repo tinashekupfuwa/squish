@@ -140,6 +140,7 @@ struct CodecSettingsSection: View {
             Picker("Encoding speed", selection: $settings.speed) {
                 ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
             }
+            .help("Media Engine uses the Mac's video chip. It finishes much faster. The file is larger than Standard for the same look. Standard is the smaller file.")
         }
     }
 

@@ -101,6 +101,24 @@ struct SimpleView: View {
                 HStack {
                     CapsLabel("Compression")
                     Spacer()
+                    Menu {
+                        ForEach(SpeedMode.allCases) { mode in
+                            Button {
+                                model.settings.speed = mode
+                            } label: {
+                                if model.settings.speed == mode { Label(mode.label, systemImage: "checkmark") } else { Text(mode.label) }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(model.settings.speed.shortLabel).font(.caption.weight(.semibold)).lineLimit(1)
+                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(0.07)))
+                    }
+                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                    .help("Media Engine uses the Mac's video chip and finishes much faster. The file is larger than Standard for the same look.")
                     PresetMenu(model: model)
                 }
                 QualityRuler(quality: Binding(get: { model.quality }, set: { model.setQuality($0) }))
