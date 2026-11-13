@@ -28,7 +28,7 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, height: 20)
+            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 30)
         }
     }
 
@@ -187,6 +187,13 @@ struct SimpleJobRow: View {
     let remove: () -> Void
     @State private var hovering = false
 
+    private var speedLine: String {
+        if stopping { return "Stopping…" }
+        if paused { return "Paused" }
+        guard let speed = job.speed else { return "Measuring speed…" }
+        return Fmt.speed(speed)
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             ZStack {
@@ -198,6 +205,11 @@ struct SimpleJobRow: View {
                 if job.state == .running {
                     MiniTickBar(value: job.progress, paused: paused || stopping, height: 9)
                         .padding(.top, 2)
+                    Text(speedLine)
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .contentTransition(.numericText())
                 } else {
                     Text(subtitle).font(.caption).foregroundStyle(job.state == .failed ? .red : .secondary).lineLimit(1)
                 }

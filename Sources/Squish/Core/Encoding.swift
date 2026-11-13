@@ -199,15 +199,20 @@ enum Encoder {
     }
 
     /// Runs one encode and returns the command line that produced it.
-    static func encode(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL, progress: @escaping @Sendable (Double) -> Void) async throws -> String {
+    static func encode(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL, speed: (@Sendable (Double) -> Void)? = nil, progress: @escaping @Sendable (Double) -> Void) async throws -> String {
         let args = arguments(input: input, probe: probe, codec: codec, crf: crf, settings: settings, keepAudio: keepAudio, maxWidth: maxWidth, output: output)
-        try await runWithProgress(args, duration: probe.duration, progress: progress, cleanup: output)
+        try await runWithProgress(args, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
         return Runner.commandLine("ffmpeg", args)
     }
 
-    static func runWithProgress(_ args: [String], duration: Double, progress: @escaping @Sendable (Double) -> Void, cleanup: URL?) async throws {
+    static func runWithProgress(_ args: [String], duration: Double, progress: @escaping @Sendable (Double) -> Void, speed: (@Sendable (Double) -> Void)? = nil, cleanup: URL?) async throws {
         do {
             _ = try await Runner.checked(try Tools.ffmpeg(), ["-progress", "pipe:1", "-nostats"] + args, keepStdout: false, onStdoutLine: { line in
+                if line.hasPrefix("speed="), let speed {
+                    let raw = line.dropFirst("speed=".count).trimmingCharacters(in: .whitespaces)
+                    if raw.hasSuffix("x"), let x = Double(raw.dropLast()), x > 0 { speed(x) }
+                    return
+                }
                 guard line.hasPrefix("out_time_us="), duration > 0, let us = Double(line.dropFirst("out_time_us=".count)) else { return }
                 progress(min(1, max(0, us / 1_000_000 / duration)))
             })

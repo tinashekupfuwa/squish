@@ -63,7 +63,7 @@ struct CompressView: View {
                             .contentTransition(.numericText())
                     }
                 }
-                MiniTickBar(value: model.overallProgress, paused: model.isPaused || model.isStopping, height: 8)
+                MiniTickBar(value: model.overallProgress, paused: model.isPaused || model.isStopping, height: 8, tint: Brand.green)
             }
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
@@ -126,6 +126,10 @@ struct JobRow: View {
             if job.state == .running {
                 HStack(spacing: 10) {
                     MiniTickBar(value: job.progress, paused: paused)
+                    if let speed = job.speed, !paused {
+                        Text(Fmt.speed(speed)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+                            .contentTransition(.numericText())
+                    }
                     Text("\(Int((job.progress * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36, alignment: .trailing)
                         .contentTransition(.numericText())
                 }

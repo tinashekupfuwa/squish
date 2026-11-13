@@ -56,6 +56,7 @@ enum Snapshots {
         running.state = .running
         running.status = "Encoding VP9 (1/2)…"
         running.progress = 0.46
+        running.speed = 2.4
         let waiting = CompressJob(url: URL(fileURLWithPath: "/Movies/team-intro.mov"))
         waiting.probe = probe("intro", 1280, 720, 22_000_000)
         model.jobs = [done, running, waiting]

@@ -30,6 +30,11 @@ enum Fmt {
         bps >= 1_000_000 ? String(format: "%.1f Mbps", Double(bps) / 1_000_000) : String(format: "%.0f kbps", Double(bps) / 1_000)
     }
 
+    /// ffmpeg speed as a multiple of real time, e.g. "2.4× real time".
+    static func speed(_ x: Double) -> String {
+        String(format: x < 1 ? "%.2f× real time" : x < 10 ? "%.1f× real time" : "%.0f× real time", x)
+    }
+
     static func dB(_ value: Double) -> String {
         value.isFinite ? String(format: "%.1f dBFS", value) : "-inf dBFS"
     }

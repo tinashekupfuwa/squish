@@ -11,6 +11,8 @@ final class CompressJob: Identifiable {
     var state: JobState = .queued
     var status = "Queued"
     var progress: Double = 0
+    /// Live encode speed as a multiple of real time, from ffmpeg's progress stream.
+    var speed: Double?
     var audioNote: String?
     var notes: [String] = []
     var outputs: [EncodeOutput] = []
@@ -191,6 +193,8 @@ final class CompressModel {
         job.error = nil
         job.html = nil
         job.progress = 0
+        job.speed = nil
+        defer { job.speed = nil }
         do {
             let codecs = s.enabledCodecs
             guard !codecs.isEmpty else { throw ToolError.message("Choose at least one output format.") }
@@ -211,7 +215,9 @@ final class CompressModel {
             for (i, codec) in codecs.enumerated() {
                 let output = OutputLocation.unique(dir.appendingPathComponent("\(stem)-\(codec.rawValue).\(codec.fileExtension)"))
                 job.status = "Encoding \(codec.shortLabel) (\(i + 1)/\(codecs.count))…"
-                let command = try await Encoder.encode(input: job.url.path, probe: probe, codec: codec, crf: s.crf(for: codec), settings: s, keepAudio: audio.keep, maxWidth: s.maxWidth, output: output) { p in
+                let command = try await Encoder.encode(input: job.url.path, probe: probe, codec: codec, crf: s.crf(for: codec), settings: s, keepAudio: audio.keep, maxWidth: s.maxWidth, output: output, speed: { x in
+                    Task { @MainActor in job.speed = x }
+                }) { p in
                     Task { @MainActor in job.progress = (Double(i) + p * 0.95) / count }
                 }
                 job.status = "Verifying \(codec.shortLabel)…"

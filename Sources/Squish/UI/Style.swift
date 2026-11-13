@@ -45,14 +45,13 @@ extension AnyTransition {
     static var card: AnyTransition { .opacity }
 }
 
-/// Rounded ticks that fill from the left in orange. Amber while paused or stopping, green when done.
+/// Rounded ticks that fill from the left in the tint color. Amber while paused or stopping, green when done.
 struct TickBar: View {
     var value: Double
     var paused = false
     var running = false
     var done = false
-    /// Fills light grey to dark grey along the bar instead of orange.
-    var greyscale = false
+    var tint: Color = Brand.green
     var tickWidth: CGFloat = 6
     var spacing: CGFloat = 3.5
     var height: CGFloat = 22
@@ -80,11 +79,10 @@ struct TickBar: View {
     }
 
     private func color(_ i: Int, count: Int, filled: Int, pulse: Double) -> Color {
-        let shade = Color.primary.opacity(0.22 + 0.63 * Double(i) / Double(max(count - 1, 1)))
-        let fill: Color = paused ? Brand.amber : done ? Brand.green : greyscale ? shade : Brand.orange
+        let fill: Color = paused ? Brand.amber : done ? Brand.green : tint
         if i < filled { return fill }
         if i == filled && running && !paused { return fill.opacity(0.3 + 0.55 * pulse) }
-        guard running || value > 0, !greyscale else { return Color.primary.opacity(0.08) }
+        guard running || value > 0 else { return Color.primary.opacity(0.08) }
         let distance = Double(i - filled)
         return Color.primary.opacity(max(0.1, 0.42 - distance * 0.08))
     }
@@ -95,9 +93,10 @@ struct MiniTickBar: View {
     var value: Double
     var paused = false
     var height: CGFloat = 10
+    var tint: Color = Brand.orange
 
     var body: some View {
-        TickBar(value: value, paused: paused, running: value < 1, greyscale: true, tickWidth: 2.5, spacing: 2.5, height: max(height, 8))
+        TickBar(value: value, paused: paused, running: value < 1, tint: tint, tickWidth: 2.5, spacing: 2.5, height: max(height, 8))
     }
 }
 
@@ -273,14 +272,14 @@ struct QualityRuler: View {
                     .buttonStyle(.plain)
                 }
             }
-            HStack(spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
                 Text("\(compression)")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
                     .lineLimit(1)
                     .fixedSize()
-                    .frame(width: 48, alignment: .leading)
+                    .frame(width: 48, height: 40, alignment: .leading)
                     .contentTransition(.numericText(value: Double(compression)))
                 GeometryReader { geo in
                     let width = geo.size.width
@@ -324,6 +323,7 @@ struct QualityRuler: View {
                     withAnimation(.spring(response: 0.3)) { quality = 50 }
                 } label: {
                     Image(systemName: "arrow.counterclockwise").font(.body.weight(.semibold))
+                        .frame(height: 40)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(quality == 50 ? .tertiary : .secondary)
@@ -445,7 +445,7 @@ struct PresetMenu: View {
         } label: {
             HStack(spacing: 6) {
                 if !compact { Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary) }
-                Text(compact ? (model.activePreset?.name ?? "Custom") : "Preset: \(model.activePreset?.name ?? "Custom")")
+                Text(model.activePreset?.name ?? "Presets")
                     .font(compact ? .caption.weight(.semibold) : .callout)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
