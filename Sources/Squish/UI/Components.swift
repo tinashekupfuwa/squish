@@ -119,6 +119,11 @@ struct CodecSettingsSection: View {
             Picker("Audio", selection: $settings.audio) {
                 ForEach(AudioMode.allCases) { Text($0.label).tag($0) }
             }
+            Toggle(isOn: $settings.losslessAudio) {
+                Text("Lossless audio")
+                Text(settings.losslessAudio ? "ALAC, bit for bit with the recording" : "AAC, smaller files, plays everywhere")
+            }
+            .help("On keeps every channel exactly as recorded. Off uses AAC at 128 kb/s per channel, which listening tests treat as transparent and which more devices play.")
             Picker("Frame rate", selection: $settings.frameRate) {
                 ForEach(FrameRateMode.allCases) { Text($0.label).tag($0) }
             }

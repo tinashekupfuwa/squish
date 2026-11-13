@@ -96,7 +96,7 @@ struct SimpleView: View {
                     Spacer()
                     PresetMenu(model: model)
                 }
-                QualityRuler(quality: $model.quality)
+                QualityRuler(quality: Binding(get: { model.quality }, set: { model.setQuality($0) }))
             }
             .disabled(model.isRunning)
 

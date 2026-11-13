@@ -50,7 +50,7 @@ enum CLI {
                 for codec in settings.enabledCodecs {
                     let out = OutputLocation.unique(try OutputLocation.directory(for: input).appendingPathComponent("\(input.deletingPathExtension().lastPathComponent)-\(codec.rawValue).\(codec.fileExtension)"))
                     let cmd = try await Encoder.encode(input: input.path, probe: probe, codec: codec, crf: settings.crf(for: codec), settings: settings, keepAudio: audio.keep, maxWidth: nil, output: out) { _ in }
-                    let v = try await Encoder.verify(output: out, codec: codec, expectedSize: Filters.outputSize(probe, maxWidth: nil), expectedFPS: Filters.targetFPS(probe, mode: settings.frameRate), pixFmt: settings.pixFmt, audio: audio.keep)
+                    let v = try await Encoder.verify(output: out, codec: codec, expectedSize: Filters.outputSize(probe, maxWidth: nil), expectedFPS: Filters.targetFPS(probe, mode: settings.frameRate), pixFmt: settings.pixFmt(for: codec, source: probe), audio: audio.keep)
                     outputs.append(EncodeOutput(codec: codec, crf: settings.crf(for: codec), url: out, bytes: v.probe.bytes, sourceBytes: probe.bytes, command: cmd, verification: v))
                     print("  \(out.path): \(Fmt.bytes(probe.bytes)) → \(Fmt.bytes(v.probe.bytes)) (\(Fmt.savings(from: probe.bytes, to: v.probe.bytes))) [\(v.passed ? "verified: " + v.checks.joined(separator: ", ") : "ISSUES: " + v.issues.joined(separator: "; "))]\n    \(cmd)")
                 }

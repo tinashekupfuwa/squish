@@ -44,10 +44,7 @@ final class CompressModel {
     var isStopping = false
     /// 0 (smallest files) to 100 (best quality); 50 is the skill's defaults.
     var quality = 50 {
-        didSet {
-            applyQuality()
-            UserDefaults.standard.set(quality, forKey: "lastQuality")
-        }
+        didSet { UserDefaults.standard.set(quality, forKey: "lastQuality") }
     }
 
     init() {
@@ -99,6 +96,7 @@ final class CompressModel {
         parts.append(settings.enabledCodecs.map(\.shortLabel).joined(separator: " + "))
         if let width = settings.maxWidth { parts.append("\(width) px max") }
         if settings.audio == .remove { parts.append("no audio") }
+        else if settings.losslessAudio { parts.append("lossless audio") }
         if settings.frameRate == .cap { parts.append("30 fps") }
         return parts.joined(separator: ", ")
     }
@@ -113,6 +111,12 @@ final class CompressModel {
 
     static func qualityName(_ quality: Int) -> String {
         quality < 35 ? "Smaller files" : quality <= 65 ? "Balanced" : "Better quality"
+    }
+
+    /// The ruler is the only thing that should rewrite a hand-set CRF. Restoring quality on launch must not.
+    func setQuality(_ value: Int) {
+        quality = value
+        applyQuality()
     }
 
     private func applyQuality() {
@@ -243,6 +247,14 @@ final class CompressModel {
             job.audioNote = audio.reason
             if probe.bitDepth > 10 { job.notes.append("Color saved at 10-bit, the most web players support (source is \(probe.bitDepth)-bit)") }
             else if probe.bitDepth > 8 && !s.tenBit { job.notes.append("Color reduced from \(probe.bitDepth)-bit to 8-bit. Turn on Smooth gradients to keep it") }
+            if probe.pixFmt.contains("422") || probe.pixFmt.contains("444") {
+                let kept = s.pixFmt(for: .h265, source: probe)
+                let sampling = probe.pixFmt.contains("444") ? "4:4:4" : "4:2:2"
+                job.notes.append(kept.contains("422") || kept.contains("444") ? "Color sampling kept at \(sampling). Some phones only play 4:2:0" : "Color reduced to 4:2:0 so browsers can play it")
+            }
+            if audio.keep {
+                job.notes.append(s.losslessAudio ? "Audio saved lossless (ALAC), every channel kept" : "Audio saved as AAC, 128 kb/s per channel")
+            }
             if let fps = probe.fps, fps.value > 30 {
                 job.notes.append(s.frameRate == .cap ? "Frame rate capped from \(fps.pretty) to \(Filters.cappedFPS(fps)!.pretty) fps" : "Frame rate preserved at \(fps.pretty) fps")
             }
@@ -260,7 +272,7 @@ final class CompressModel {
                     Task { @MainActor in job.progress = (Double(i) + p * 0.95) / count }
                 }
                 job.status = "Verifying \(codec.shortLabel)…"
-                let verification = try await Encoder.verify(output: output, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: s.frameRate), pixFmt: s.pixFmt, audio: audio.keep)
+                let verification = try await Encoder.verify(output: output, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: s.frameRate), pixFmt: s.pixFmt(for: codec, source: probe), audio: audio.keep)
                 job.outputs.append(EncodeOutput(codec: codec, crf: s.crf(for: codec), url: output, bytes: verification.probe.bytes, sourceBytes: probe.bytes, command: command, verification: verification))
             }
             job.html = Encoder.htmlSnippet(job.outputs)

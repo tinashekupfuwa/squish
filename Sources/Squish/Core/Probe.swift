@@ -48,6 +48,10 @@ struct ProbeInfo: Hashable, Sendable {
     let level: Int
     let bitRate: Int64
     let audio: [AudioStream]
+    var colorPrimaries = ""
+    var colorTransfer = ""
+    var colorSpace = ""
+    var colorRange = ""
 
     var rotated: Bool { abs(rotation) % 180 == 90 }
     var width: Int { rotated ? codedHeight : codedWidth }
@@ -108,6 +112,10 @@ enum Probe {
         let audio = streams.filter { $0["codec_type"] as? String == "audio" }.map {
             AudioStream(codec: $0["codec_name"] as? String ?? "?", channels: Int(number($0["channels"]) ?? 0), layout: $0["channel_layout"] as? String ?? "")
         }
+        func tag(_ key: String) -> String {
+            let value = (video[key] as? String ?? "").lowercased()
+            return value == "unknown" || value == "unspecified" ? "" : value
+        }
         return ProbeInfo(
             source: source,
             bytes: bytes,
@@ -121,7 +129,11 @@ enum Probe {
             profile: video["profile"] as? String ?? "",
             level: Int(number(video["level"]) ?? -99),
             bitRate: Int64(number(format["bit_rate"]) ?? number(video["bit_rate"]) ?? 0),
-            audio: audio
+            audio: audio,
+            colorPrimaries: tag("color_primaries"),
+            colorTransfer: tag("color_transfer"),
+            colorSpace: tag("color_space"),
+            colorRange: tag("color_range")
         )
     }
 

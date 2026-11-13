@@ -55,25 +55,26 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
         }
     }
 
-    /// Every source channel is kept, never mixed down, at 96 kb/s per channel for Opus and 128 kb/s per channel for AAC,
-    /// above the rates listening tests treat as transparent. Opus only accepts the Vorbis surround layouts, so any other
-    /// layout up to 8 channels (a recorder's 4.0, 5.1 with side channels, unlabelled tracks) is relabelled by position
-    /// without touching the samples. Tracks the Vorbis layouts can't hold without inventing a band-limited LFE channel,
-    /// and anything over 8 channels, are encoded as independent discrete channels.
-    func audioFlags(keep: Bool, audio: AudioStream?) -> [String] {
-        guard keep else { return ["-an"] }
-        let channels = max(audio?.channels ?? 2, 1)
+    /// Every audio stream is kept, never mixed down. H.265 can store them losslessly as ALAC, which is bit-exact.
+    /// AAC is 128 kb/s per channel of the first stream. Opus (WebM) cannot be lossless: 96 kb/s per channel, and it
+    /// only accepts the Vorbis surround layouts, so any other layout up to 8 channels is relabelled by position
+    /// without touching the samples. Layouts that would invent a band-limited LFE, and anything over 8 channels,
+    /// are encoded as independent discrete channels.
+    func audioFlags(keep: Bool, streams: [AudioStream], lossless: Bool) -> [String] {
+        guard keep, !streams.isEmpty else { return ["-an"] }
+        let channels = max(streams[0].channels, 1)
+        let audio = streams[0]
         guard self != .h265 else {
-            return ["-map", "0:a:0", "-c:a", "aac", "-b:a", "\(128 * channels)k"]
+            return lossless ? ["-map", "0:a", "-c:a", "alac"] : ["-map", "0:a", "-c:a", "aac", "-b:a", "\(128 * channels)k"]
         }
         var flags = ["-map", "0:a:0", "-c:a", "libopus", "-b:a", "\(96 * channels)k"]
         guard channels > 2 else { return flags }
         let opusLayouts = ["3.0", "quad", "5.0", "5.1", "6.1", "7.1"]
         let target = channels <= opusLayouts.count + 2 ? opusLayouts[channels - 3] : ""
-        let hasLFE = audio?.layout.contains(".1") ?? false
+        let hasLFE = audio.layout.contains(".1")
         if target.isEmpty || (target.contains(".1") && !hasLFE) { return flags + ["-mapping_family", "255"] }
         flags += ["-mapping_family", "1"]
-        if audio?.layout != target { flags += ["-af", "channelmap=channel_layout=\(target)"] }
+        if audio.layout != target { flags += ["-af", "channelmap=channel_layout=\(target)"] }
         return flags
     }
 }
@@ -112,6 +113,10 @@ struct EncodeSettings: Codable, Equatable, Sendable {
     var tenBit = true
     var maxWidth: Int? = nil
     var speed: SpeedMode = .faster
+    /// ALAC in the MP4, bit-exact. WebM has no lossless audio, so Opus stays at the high bitrate above.
+    var losslessAudio = true
+
+    init() {}
 
     var enabledCodecs: [Codec] {
         Codec.allCases.filter { codec in
@@ -122,8 +127,48 @@ struct EncodeSettings: Codable, Equatable, Sendable {
             }
         }
     }
-    var pixFmt: String { tenBit ? "yuv420p10le" : "yuv420p" }
     func crf(for codec: Codec) -> Int { crf[codec] ?? codec.defaultCRF }
+
+    /// H.265 keeps the source chroma (a Ninja 4:2:2 master stays 4:2:2). VP9 and AV1 are 4:2:0, which is what browsers play.
+    func pixFmt(for codec: Codec, source: ProbeInfo) -> String {
+        let sub: String
+        if codec == .h265 && source.pixFmt.contains("444") { sub = "444" }
+        else if codec == .h265 && source.pixFmt.contains("422") { sub = "422" }
+        else { sub = "420" }
+        return tenBit ? "yuv\(sub)p10le" : "yuv\(sub)p"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case vp9, h265, av1, crf, audio, frameRate, tenBit, maxWidth, speed, losslessAudio
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        vp9 = try c.decodeIfPresent(Bool.self, forKey: .vp9) ?? false
+        h265 = try c.decodeIfPresent(Bool.self, forKey: .h265) ?? true
+        av1 = try c.decodeIfPresent(Bool.self, forKey: .av1) ?? false
+        crf = try c.decodeIfPresent([Codec: Int].self, forKey: .crf) ?? [.vp9: 42, .h265: 30, .av1: 42]
+        audio = try c.decodeIfPresent(AudioMode.self, forKey: .audio) ?? .auto
+        frameRate = try c.decodeIfPresent(FrameRateMode.self, forKey: .frameRate) ?? .preserve
+        tenBit = try c.decodeIfPresent(Bool.self, forKey: .tenBit) ?? true
+        maxWidth = try c.decodeIfPresent(Int.self, forKey: .maxWidth) ?? nil
+        speed = try c.decodeIfPresent(SpeedMode.self, forKey: .speed) ?? .faster
+        losslessAudio = try c.decodeIfPresent(Bool.self, forKey: .losslessAudio) ?? true
+    }
+
+    func encode(to encoder: Swift.Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(vp9, forKey: .vp9)
+        try c.encode(h265, forKey: .h265)
+        try c.encode(av1, forKey: .av1)
+        try c.encode(crf, forKey: .crf)
+        try c.encode(audio, forKey: .audio)
+        try c.encode(frameRate, forKey: .frameRate)
+        try c.encode(tenBit, forKey: .tenBit)
+        try c.encodeIfPresent(maxWidth, forKey: .maxWidth)
+        try c.encode(speed, forKey: .speed)
+        try c.encode(losslessAudio, forKey: .losslessAudio)
+    }
 }
 
 enum Filters {
@@ -204,24 +249,46 @@ enum Encoder {
             return AudioDecision(keep: false, reason: "Audio removed (requested)", peak: nil)
         case .keep:
             guard !probe.audio.isEmpty else { throw ToolError.message("Keep audio was requested, but the source has no audio stream.") }
-            return AudioDecision(keep: true, reason: "First audio track kept (requested)", peak: nil)
+            return AudioDecision(keep: true, reason: "Audio kept (requested)", peak: nil)
         case .auto:
             guard let peak = try await Probe.maxAudioPeak(input, streamCount: probe.audio.count) else {
                 return AudioDecision(keep: false, reason: "No audio stream", peak: nil)
             }
             if peak <= -50 { return AudioDecision(keep: false, reason: "Audio is silent (peak \(Fmt.dB(peak)) ≤ -50), removed", peak: peak) }
-            return AudioDecision(keep: true, reason: "Audible audio (peak \(Fmt.dB(peak))), first track kept", peak: peak)
+            return AudioDecision(keep: true, reason: "Audible audio (peak \(Fmt.dB(peak))), kept", peak: peak)
         }
     }
 
     static func arguments(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL) -> [String] {
         var args = ["-hide_banner", "-nostdin", "-n", "-i", input, "-map", "0:v:0"]
-        args += codec.videoFlags(crf: crf, pixFmt: settings.pixFmt, speed: settings.speed)
+        args += codec.videoFlags(crf: crf, pixFmt: settings.pixFmt(for: codec, source: probe), speed: settings.speed)
+        args += colorFlags(probe, codec: codec)
         let chain = Filters.chain(probe, maxWidth: maxWidth, frameRate: settings.frameRate)
         if !chain.isEmpty { args += ["-vf", chain] }
-        args += codec.audioFlags(keep: keepAudio, audio: probe.audio.first)
+        args += codec.audioFlags(keep: keepAudio, streams: probe.audio, lossless: settings.losslessAudio)
         args.append(output.path)
         return args
+    }
+
+    /// libx265 drops container color tags unless they are also passed as encoder params, so both are set.
+    private static func colorFlags(_ probe: ProbeInfo, codec: Codec) -> [String] {
+        func known(_ value: String) -> String? {
+            let v = value.lowercased()
+            return v.isEmpty || v == "unknown" || v == "unspecified" ? nil : v
+        }
+        var flags: [String] = []
+        if let v = known(probe.colorPrimaries) { flags += ["-color_primaries", v] }
+        if let v = known(probe.colorTransfer) { flags += ["-color_trc", v] }
+        if let v = known(probe.colorSpace) { flags += ["-colorspace", v] }
+        if let v = known(probe.colorRange) { flags += ["-color_range", v == "pc" || v == "jpeg" ? "pc" : "tv"] }
+        guard codec == .h265 else { return flags }
+        var params: [String] = []
+        if let v = known(probe.colorPrimaries) { params.append("colorprim=\(v)") }
+        if let v = known(probe.colorTransfer) { params.append("transfer=\(v)") }
+        if let v = known(probe.colorSpace) { params.append("colormatrix=\(v)") }
+        if known(probe.colorRange) != nil { params.append("range=\(probe.colorRange == "pc" || probe.colorRange == "jpeg" ? "full" : "limited")") }
+        if !params.isEmpty { flags += ["-x265-params", params.joined(separator: ":")] }
+        return flags
     }
 
     /// Runs one encode and returns the command line that produced it.

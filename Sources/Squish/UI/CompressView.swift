@@ -52,12 +52,14 @@ struct CompressView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Form {
-                PresetSection(model: model)
-                CodecSettingsSection(settings: $model.settings)
-                DestinationSection()
+            ScrollView {
+                Form {
+                    PresetSection(model: model)
+                    CodecSettingsSection(settings: $model.settings)
+                    DestinationSection()
+                }
+                .clearFormBackground()
             }
-            .clearFormBackground()
             .frame(width: 320)
             .disabled(model.isRunning)
             Divider()

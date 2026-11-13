@@ -2,7 +2,7 @@ import Foundation
 
 struct OptimizeOptions: Sendable {
     var audit: AuditOptions = { var o = AuditOptions(); o.maxPages = 10; return o }()
-    var encode: EncodeSettings = { var s = EncodeSettings(); s.vp9 = true; s.speed = .skill; return s }()
+    var encode: EncodeSettings = { var s = EncodeSettings(); s.vp9 = true; s.speed = .skill; s.losslessAudio = false; return s }()
     var threshold: Double = 0.05
     var removeAudioWhenMutedWithoutControls = false
 }
@@ -153,7 +153,7 @@ enum Optimizer {
                     progress(base + p / Double(codecs.count) / total)
                 }
                 log("Verifying \(name)…")
-                let verification = try await Encoder.verify(output: out, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: options.encode.frameRate), pixFmt: options.encode.pixFmt, audio: audio.keep)
+                let verification = try await Encoder.verify(output: out, codec: codec, expectedSize: expected, expectedFPS: Filters.targetFPS(probe, mode: options.encode.frameRate), pixFmt: options.encode.pixFmt(for: codec, source: probe), audio: audio.keep)
                 let output = EncodeOutput(codec: codec, crf: crf, url: out, bytes: verification.probe.bytes, sourceBytes: probe.bytes, command: command, verification: verification)
                 plan.outputs.append(output)
                 if verification.passed { outputs[codec] = output } else { plan.notes.append("\(codec.shortLabel) failed verification (\(verification.issues.joined(separator: "; "))); not used.") }

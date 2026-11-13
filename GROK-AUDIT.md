@@ -1,6 +1,6 @@
 # Grok audit
 
-Audited 13 Nov 2026 on `grok-ai`, which is `main` at 4359bf2 with no code changes. The installed app is still Squish 1.18. This is a review, not a fix.
+Audited 13 Nov 2026 on `grok-ai`. Squish 1.19, on this branch, fixes findings 1 to 3: 4:2:2 is kept, a hand-set CRF survives relaunch, and audio defaults to lossless ALAC.
 
 The file this is written against is `/Volumes/LunchBox/NINJAU_S001_S001_T002.MOV`. Read with ffprobe only. Nothing was encoded and the file was not modified.
 
