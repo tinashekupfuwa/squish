@@ -237,7 +237,8 @@ struct SimpleJobRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: Radius.row).fill(Color.primary.opacity(hovering ? 0.07 : 0.04)))
+        .surfaceCard(cornerRadius: Radius.row)
+        .overlay(RoundedRectangle(cornerRadius: Radius.row).fill(Color.primary.opacity(hovering ? 0.04 : 0)).allowsHitTesting(false))
         .onHover { hovering = $0 }
         .help(job.error ?? (job.outputs.isEmpty ? "" : (job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" } + ["MP4 plays everywhere. WebM is smaller for Chrome, Firefox, and Edge. Use both on a website, or just the MP4 elsewhere. Double-click to show in Finder."]).joined(separator: "\n")))
         .onTapGesture(count: 2) { if !job.outputs.isEmpty { Finder.reveal(job.outputs.map(\.url)) } }

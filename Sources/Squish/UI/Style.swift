@@ -35,13 +35,9 @@ enum Brand {
 }
 
 extension View {
-    /// A quiet card surface that keeps text contrast in light and dark appearance.
+    /// A card surface: frosted glass when the glass look is on, otherwise a quiet tinted panel.
     func surfaceCard(cornerRadius: CGFloat = Radius.card, tint: Color? = nil) -> some View {
-        background {
-            RoundedRectangle(cornerRadius: cornerRadius)
-                .fill(tint.map { $0.opacity(0.08) } ?? Color.primary.opacity(0.04))
-                .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.25), lineWidth: 0.75))
-        }
+        modifier(SurfaceCard(cornerRadius: cornerRadius, tint: tint))
     }
 
     @ViewBuilder
@@ -49,7 +45,67 @@ extension View {
         if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
     }
 
-    func clearFormBackground() -> some View { formStyle(.grouped).controlSize(.small).font(.callout) }
+    func clearFormBackground() -> some View { formStyle(.grouped).scrollContentBackground(.hidden).controlSize(.small).font(.callout) }
+}
+
+/// Card background. With glass on it is a translucent panel with a bright top edge, like light catching a pane,
+/// so cards float over the blurred desktop; text stays on an opaque-enough fill to keep its contrast.
+struct SurfaceCard: ViewModifier {
+    var cornerRadius: CGFloat
+    var tint: Color?
+    @AppStorage("glassUI") private var glass = true
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius)
+        let dark = scheme == .dark
+        content.background {
+            if glass {
+                shape
+                    .fill(tint.map { $0.opacity(dark ? 0.16 : 0.12) } ?? Color.white.opacity(dark ? 0.08 : 0.45))
+                    .overlay(shape.strokeBorder(LinearGradient(colors: [(tint ?? .white).opacity(dark ? 0.28 : 0.9), (tint ?? .white).opacity(dark ? 0.04 : 0.3)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+                    .shadow(color: .black.opacity(dark ? 0.22 : 0.06), radius: 12, y: 4)
+            } else {
+                shape
+                    .fill(tint.map { $0.opacity(0.08) } ?? Color.primary.opacity(0.04))
+                    .overlay(shape.strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.25), lineWidth: 0.75))
+            }
+        }
+    }
+}
+
+/// Makes the window itself translucent, so the desktop shows through blurred, when the glass look is on.
+struct GlassWindow: ViewModifier {
+    @AppStorage("glassUI") private var glass = true
+
+    func body(content: Content) -> some View {
+        if glass, #available(macOS 15, *) {
+            content.containerBackground(.regularMaterial, for: .window)
+        } else {
+            content
+        }
+    }
+}
+
+/// Glass pill for secondary controls: the same frosted fill and bright top edge as cards, so control labels keep their color.
+struct GlassControl<S: InsettableShape>: ViewModifier {
+    var shape: S
+    var fallback: Color
+    @AppStorage("glassUI") private var glass = true
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View {
+        let dark = scheme == .dark
+        if glass {
+            content.background {
+                shape
+                    .fill(Color.white.opacity(dark ? 0.12 : 0.55))
+                    .overlay(shape.strokeBorder(LinearGradient(colors: [.white.opacity(dark ? 0.3 : 0.95), .white.opacity(dark ? 0.05 : 0.35)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
+            }
+        } else {
+            content.background(shape.fill(fallback))
+        }
+    }
 }
 
 extension AnyTransition {
@@ -290,7 +346,7 @@ struct PillSegmented: View {
             }
         }
         .padding(3)
-        .background(Capsule().fill(Color.primary.opacity(scheme == .dark ? 0.08 : 0.07)))
+        .modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(scheme == .dark ? 0.08 : 0.07)))
     }
 }
 
@@ -393,8 +449,7 @@ struct QualityRuler: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: Radius.card).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
+            .surfaceCard()
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Compression")
             .accessibilityValue("\(compression), \(presetName)")
@@ -467,11 +522,21 @@ struct PanelButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
             .foregroundStyle(primary ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(tint ?? Color.primary))
-            .background(Capsule().fill(primary ? Color.primary.opacity(0.9) : Color.primary.opacity(0.07)))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(primary ? 0 : 0.1), lineWidth: 0.75))
+            .modifier(PanelButtonBackground(primary: primary))
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private struct PanelButtonBackground: ViewModifier {
+    let primary: Bool
+    func body(content: Content) -> some View {
+        if primary {
+            content.background(Capsule().fill(Color.primary.opacity(0.9)))
+        } else {
+            content.modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(0.07)))
+        }
     }
 }
 
@@ -515,7 +580,7 @@ struct PresetMenu: View {
             }
             .padding(.horizontal, compact ? 10 : 0)
             .padding(.vertical, compact ? 4 : 0)
-            .background { if compact { Capsule().fill(Color.primary.opacity(0.07)) } }
+            .modifier(GlassControl(shape: Capsule(), fallback: compact ? Color.primary.opacity(0.07) : .clear))
             .contentShape(Capsule())
         }
         .menuStyle(.button)

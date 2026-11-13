@@ -34,7 +34,7 @@ enum Snapshots {
         for (base, view, size) in shots {
           for dark in [false, true] {
             let name = base + (dark ? "-dark" : "-light")
-            let host = NSHostingView(rootView: view.tint(Brand.indigo).environment(\.colorScheme, dark ? .dark : .light).frame(width: size.width, height: size.height).background(Color(nsColor: .windowBackgroundColor)))
+            let host = NSHostingView(rootView: view.tint(Brand.indigo).environment(\.colorScheme, dark ? .dark : .light).frame(width: size.width, height: size.height).background(backdrop(dark: dark)).clipped())
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
             window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
             host.appearance = window.appearance
@@ -45,6 +45,19 @@ enum Snapshots {
             host.cacheDisplay(in: host.bounds, to: rep)
             try rep.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("\(name).png"))
           }
+        }
+    }
+
+    /// Offscreen renders can't sample the desktop, so glass snapshots stand in a blurred wallpaper under a thin-material tint.
+    @ViewBuilder
+    private static func backdrop(dark: Bool) -> some View {
+        if UserDefaults.standard.object(forKey: "glassUI") as? Bool ?? true, let image = NSImage(contentsOfFile: "/System/Library/Desktop Pictures/.thumbnails/Catalina Coast.heic") {
+            ZStack {
+                Image(nsImage: image).resizable().scaledToFill().blur(radius: 60)
+                Color(nsColor: .windowBackgroundColor).opacity(dark ? 0.7 : 0.62)
+            }
+        } else {
+            Color(nsColor: .windowBackgroundColor)
         }
     }
 

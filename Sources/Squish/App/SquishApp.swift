@@ -5,6 +5,7 @@ struct SquishApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var state = AppState.shared
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
+    @AppStorage("glassUI") private var glassUI = true
 
     var body: some Scene {
         WindowGroup("Squish", id: "main") {
@@ -22,6 +23,8 @@ struct SquishApp: App {
             CommandGroup(after: .sidebar) {
                 Button("Simple Mode") { UserDefaults.standard.set("simple", forKey: "uiMode") }.keyboardShortcut("1", modifiers: [.command, .option])
                 Button("Advanced Mode") { UserDefaults.standard.set("advanced", forKey: "uiMode") }.keyboardShortcut("2", modifiers: [.command, .option])
+                Divider()
+                Toggle("Glass Look", isOn: $glassUI)
             }
         }
 
@@ -134,6 +137,7 @@ struct RootView: View {
                     .allowsHitTesting(false)
             }
         }
+        .modifier(GlassWindow())
         .dropDestination(for: URL.self) { urls, _ in
             state.receive(urls, fromWindow: true)
             return !urls.isEmpty
@@ -288,11 +292,16 @@ struct SettingsView: View {
     @AppStorage("ffmpegPath") private var ffmpegPath = ""
     @AppStorage("ffprobePath") private var ffprobePath = ""
     @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
+    @AppStorage("glassUI") private var glassUI = true
 
     var body: some View {
         Form {
             Section("General") {
                 Toggle("Show Squish in the menu bar", isOn: $showMenuBarIcon)
+                Toggle(isOn: $glassUI) {
+                    Text("Glass look")
+                    Text("The window lets your desktop show through, blurred, and panels look like frosted glass.")
+                }
             }
             DestinationSection()
             Section("Tools") {
