@@ -209,8 +209,8 @@ final class CompressModel {
             job.status = "Analyzing audio…"
             let audio = try await Encoder.decideAudio(input: job.url.path, probe: probe, mode: s.audio)
             job.audioNote = audio.reason
-            if probe.bitDepth > 10 { job.notes.append("\(probe.bitDepth)-bit source encoded at 10-bit, the highest web players support") }
-            else if probe.bitDepth > 8 && !s.tenBit { job.notes.append("\(probe.bitDepth)-bit source reduced to 8-bit; turn on 10-bit output to keep it") }
+            if probe.bitDepth > 10 { job.notes.append("Color saved at 10-bit, the most web players support (source is \(probe.bitDepth)-bit)") }
+            else if probe.bitDepth > 8 && !s.tenBit { job.notes.append("Color reduced from \(probe.bitDepth)-bit to 8-bit. Turn on Smooth gradients to keep it") }
             if let fps = probe.fps, fps.value > 30 {
                 job.notes.append(s.frameRate == .cap ? "Frame rate capped from \(fps.pretty) to \(Filters.cappedFPS(fps)!.pretty) fps" : "Frame rate preserved at \(fps.pretty) fps")
             }

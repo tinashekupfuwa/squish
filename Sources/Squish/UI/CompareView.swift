@@ -99,7 +99,8 @@ struct CompareView: View {
                 Picker("Above 30 fps", selection: $model.options.frameRate) {
                     ForEach(FrameRateMode.allCases) { Text($0.label).tag($0) }
                 }
-                Toggle("10-bit", isOn: $model.options.tenBit)
+                Toggle("Smooth gradients", isOn: $model.options.tenBit)
+                    .help("Encode the test clips with 10-bit color, as Compress does by default.")
                 Picker("Encoder speed", selection: $model.options.speed) {
                     ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
                 }

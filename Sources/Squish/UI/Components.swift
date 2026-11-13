@@ -123,8 +123,11 @@ struct CodecSettingsSection: View {
                 ForEach(FrameRateMode.allCases) { Text($0.label).tag($0) }
             }
             if showResize { OptionalIntField(label: "Max width (px)", value: $settings.maxWidth) }
-            Toggle("10-bit output", isOn: $settings.tenBit)
-                .help("Highest bit depth web players support. Keeps gradients smooth and preserves 10-bit and 12-bit sources as closely as possible.")
+            Toggle(isOn: $settings.tenBit) {
+                Text("Smooth gradients")
+                Text(settings.tenBit ? "Keeps skies and shadows free of banding" : "Plays on very old devices; gradients may show banding")
+            }
+            .help("Saves video with 10-bit color, the most web players support. Turn off only if the video must play on devices from before about 2016.")
             Picker("Encoder speed", selection: $settings.speed) {
                 ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
             }
