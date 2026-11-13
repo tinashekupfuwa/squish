@@ -55,8 +55,11 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
         }
     }
 
-    func audioFlags(keep: Bool) -> [String] {
-        keep ? ["-map", "0:a:0", "-c:a", self == .h265 ? "aac" : "libopus"] : ["-an"]
+    /// Surround and multichannel recorder audio (4.0, 5.1, separate mics) is mixed to stereo: Opus rejects many
+    /// of those layouts, and browsers play stereo anyway.
+    func audioFlags(keep: Bool, channels: Int) -> [String] {
+        guard keep else { return ["-an"] }
+        return ["-map", "0:a:0", "-c:a", self == .h265 ? "aac" : "libopus"] + (channels > 2 ? ["-ac", "2"] : [])
     }
 }
 
@@ -201,7 +204,7 @@ enum Encoder {
         args += codec.videoFlags(crf: crf, pixFmt: settings.pixFmt, speed: settings.speed)
         let chain = Filters.chain(probe, maxWidth: maxWidth, frameRate: settings.frameRate)
         if !chain.isEmpty { args += ["-vf", chain] }
-        args += codec.audioFlags(keep: keepAudio)
+        args += codec.audioFlags(keep: keepAudio, channels: probe.audio.first?.channels ?? 0)
         args.append(output.path)
         return args
     }
