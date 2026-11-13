@@ -15,7 +15,7 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     var audience: String {
         switch self {
         case .vp9: return "Chrome, Firefox, Edge"
-        case .h265: return "Safari, iPhone, Mac"
+        case .h265: return "Mac, QuickTime, newer iPhones"
         case .av1: return "Smallest; slow to make"
         }
     }
@@ -115,6 +115,19 @@ struct EncodeSettings: Codable, Equatable, Sendable {
     var speed: SpeedMode = .faster
     /// ALAC in the MP4, bit-exact. WebM has no lossless audio, so Opus stays at the high bitrate above.
     var losslessAudio = true
+
+    /// What Start will actually write, in the same words on every screen.
+    var planLine: String {
+        let formats = enabledCodecs.isEmpty ? "No format selected" : enabledCodecs.map { $0 == .h265 ? "H.265 MP4" : $0.label }.joined(separator: " + ")
+        let sound: String
+        switch audio {
+        case .remove: sound = "no audio"
+        case .auto, .keep: sound = losslessAudio && (h265 || enabledCodecs.isEmpty) ? "lossless audio" : "AAC audio"
+        }
+        var size = maxWidth.map { "\($0) px wide" } ?? "original size"
+        if frameRate == .cap { size += ", 30 fps max" }
+        return "\(formats) · \(sound) · \(size)"
+    }
 
     init() {}
 

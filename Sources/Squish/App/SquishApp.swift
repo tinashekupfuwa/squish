@@ -150,7 +150,7 @@ struct RootView: View {
 
 enum AppSize {
     static let simple = NSSize(width: 380, height: 680)
-    static let advanced = NSSize(width: 940, height: 600)
+    static let advanced = NSSize(width: 940, height: 800)
 }
 
 enum WindowSizer {

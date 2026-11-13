@@ -44,11 +44,18 @@ struct QueueStatus: View {
 
     private var finished: Bool { !model.isRunning && !model.doneJobs.isEmpty && model.pending.isEmpty }
 
+    /// Positive when the finished files are smaller than the originals.
+    private var shrink: Double {
+        let source = model.doneJobs.compactMap { $0.outputs.first?.sourceBytes }.reduce(0, +)
+        let out = model.doneJobs.compactMap { $0.outputs.map(\.bytes).min() }.reduce(0, +)
+        return source > 0 ? 1 - Double(out) / Double(source) : 0
+    }
+
     private var bigNumber: String {
-        if finished { return "\(Int((model.savedRatio * 100).rounded()))" }
+        if finished { return "\(Int((abs(shrink) * 100).rounded()))" }
         return "\(Int((model.displayProgress * 100).rounded()))"
     }
-    private var unit: String { finished ? "% smaller" : "%" }
+    private var unit: String { finished ? (shrink < -0.005 ? "% larger" : "% smaller") : "%" }
 
     private var headline: String {
         if model.isStopping { return "Stopping…" }
@@ -58,7 +65,7 @@ struct QueueStatus: View {
         if model.jobs.isEmpty { return "Ready" }
         return "\(model.pending.count) waiting"
     }
-    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.statusGrey : finished ? Brand.green : .primary }
+    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.statusGrey : finished ? (shrink < -0.005 ? Brand.amber : Brand.green) : .primary }
 
     private var detail: String {
         if let job = model.currentJob { return "\(job.url.lastPathComponent) · \(model.doneJobs.count + 1) of \(model.jobs.count)" }
@@ -97,6 +104,13 @@ struct SimpleView: View {
                     PresetMenu(model: model)
                 }
                 QualityRuler(quality: Binding(get: { model.quality }, set: { model.setQuality($0) }))
+                if !model.jobs.isEmpty {
+                    Text(model.settings.planLine)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.horizontal, 4)
+                }
             }
             .disabled(model.isRunning)
 
@@ -120,12 +134,17 @@ struct SimpleView: View {
                     Image(systemName: "plus.circle").font(.system(size: 28, weight: .light))
                     Text("Drop videos here").font(.headline)
                     Text("or click to choose").font(.callout).foregroundStyle(.secondary)
-                    Text("Squish saves smaller copies that play on the web. Your original videos are never changed.")
+                    Text(model.settings.planLine)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 280)
+                        .padding(.top, 10)
+                    Text("Saved next to the original, which is never changed.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 250)
-                        .padding(.top, 10)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
@@ -188,6 +207,12 @@ struct SimpleView: View {
                 if model.pending.isEmpty {
                     Button { model.add(Panels.chooseVideos()) } label: { Label(model.jobs.isEmpty ? "Add videos" : "Add more videos", systemImage: "plus") }
                         .buttonStyle(PanelButtonStyle(primary: true))
+                } else if model.settings.enabledCodecs.isEmpty {
+                    Text("Turn on a format in Advanced")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 11)
                 } else {
                     Button { model.start() } label: { Label("Start", systemImage: "play.fill") }
                         .buttonStyle(PanelButtonStyle(primary: true))
@@ -240,7 +265,7 @@ struct SimpleJobRow: View {
         .surfaceCard(cornerRadius: Radius.row)
         .overlay(RoundedRectangle(cornerRadius: Radius.row).fill(Color.primary.opacity(hovering ? 0.04 : 0)).allowsHitTesting(false))
         .onHover { hovering = $0 }
-        .help(job.error ?? (job.outputs.isEmpty ? "" : (job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" } + ["MP4 plays everywhere. WebM is smaller for Chrome, Firefox, and Edge. Use both on a website, or just the MP4 elsewhere. Double-click to show in Finder."]).joined(separator: "\n")))
+        .help(job.error ?? (job.outputs.isEmpty ? "Double-click a finished video to show it in Finder." : (job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" } + ["Double-click to show in Finder."]).joined(separator: "\n")))
         .onTapGesture(count: 2) { if !job.outputs.isEmpty { Finder.reveal(job.outputs.map(\.url)) } }
     }
 
@@ -251,16 +276,18 @@ struct SimpleJobRow: View {
         } else if job.state == .running {
             Text("\(Int((job.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
         } else if job.state == .done, let smallest = job.outputs.map(\.bytes).min(), let source = job.outputs.first?.sourceBytes, source > 0 {
+            let ratio = 1 - Double(smallest) / Double(source)
+            let grew = ratio < -0.005
             HStack(spacing: 6) {
-                Text("−\(Int(((1 - Double(smallest) / Double(source)) * 100).rounded()))%")
+                Text(grew ? "+\(Int((abs(ratio) * 100).rounded()))%" : ratio < 0.005 ? "same" : "−\(Int((ratio * 100).rounded()))%")
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(Brand.green)
+                    .foregroundStyle(grew ? Brand.amber : ratio < 0.005 ? Color.secondary : Brand.green)
                     .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(Brand.green.opacity(0.15)))
+                    .background(Capsule().fill((grew ? Brand.amber : Brand.green).opacity(ratio < 0.005 && !grew ? 0.08 : 0.15)))
                 Button { Finder.reveal(job.outputs.map(\.url)) } label: { Image(systemName: "magnifyingglass") }
                     .buttonStyle(.plain).foregroundStyle(.secondary).help("Show in Finder").accessibilityLabel("Show \(job.url.lastPathComponent) in Finder")
             }
-        } else if hovering {
+        } else if job.state != .done || hovering {
             Button(action: remove) { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
         }
     }
@@ -273,7 +300,9 @@ struct SimpleJobRow: View {
         case .failed: return job.error ?? "Failed"
         case .cancelled: return "Stopped · starts over when you press Start"
         default:
-            return job.probe.map { "\($0.dimensions)\($0.bitDepth > 8 ? " · \($0.bitDepth)-bit" : "") · \(Fmt.duration($0.duration)) · \(Fmt.bytes($0.bytes))" } ?? "Waiting"
+            guard let probe = job.probe else { return "Waiting" }
+            let long = probe.duration >= 3600 || probe.bytes > CompressModel.largeVideoBytes
+            return "\(probe.dimensions)\(probe.bitDepth > 8 ? " · \(probe.bitDepth)-bit" : "") · \(Fmt.duration(probe.duration)) · \(Fmt.bytes(probe.bytes))\(long ? " · takes hours" : "")"
         }
     }
 

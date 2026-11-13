@@ -58,8 +58,8 @@ struct MenuBarPanel: View {
                         .frame(width: 52)
                 } else {
                     Button { model.start() } label: { Label("Start", systemImage: "play.fill") }
-                        .buttonStyle(PanelButtonStyle(primary: !model.pending.isEmpty))
-                        .disabled(model.pending.isEmpty)
+                        .buttonStyle(PanelButtonStyle(primary: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty))
+                        .disabled(model.pending.isEmpty || model.settings.enabledCodecs.isEmpty)
                 }
             }
 

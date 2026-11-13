@@ -60,7 +60,9 @@ struct CompressView: View {
                 }
                 .clearFormBackground()
             }
+            .scrollIndicators(.visible)
             .frame(width: 320)
+            .frame(maxHeight: .infinity)
             .disabled(model.isRunning)
             Divider()
             VStack(spacing: 12) {

@@ -484,9 +484,9 @@ struct QualityRuler: View {
 
     private var caption: String {
         switch presetName {
-        case "Light": return "Bigger files that look the same as the original."
-        case "Balanced": return "Much smaller files with no visible quality loss. Recommended."
-        default: return "Smallest files. Fine detail may look softer."
+        case "Light": return "Largest picture. This slider does not change the audio."
+        case "Balanced": return abs(compression - 50) <= 2 ? "Recommended. Smaller picture, no visible loss. Audio is unchanged." : "Smaller picture, no visible loss. Audio is unchanged."
+        default: return "Smallest picture. Fine detail may look softer. Audio is unchanged."
         }
     }
 }
