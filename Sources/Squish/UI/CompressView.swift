@@ -1,23 +1,59 @@
 import SwiftUI
 
+/// Preset picker for Advanced mode: a standard dropdown like the other options, with save and delete beside it.
+struct PresetSection: View {
+    @Bindable var model: CompressModel
+    @State private var naming = false
+    @State private var name = ""
+
+    var body: some View {
+        Section {
+            Picker(selection: Binding(
+                get: { model.activePreset?.id },
+                set: { id in if let preset = model.allPresets.first(where: { $0.id == id }) { model.apply(preset) } }
+            )) {
+                if model.activePreset == nil { Text("Your own settings").tag(UUID?.none) }
+                ForEach(EncodePreset.builtIns) { Text($0.name).tag(Optional($0.id)) }
+                if !model.userPresets.isEmpty {
+                    Divider()
+                    ForEach(model.userPresets) { Text($0.name).tag(Optional($0.id)) }
+                }
+            } label: {
+                Text("Preset")
+            }
+            .help(model.activePreset.map { "\($0.name): \($0.detail)" } ?? "Your settings don't match a preset. Save them to reuse later.")
+            HStack {
+                Button("Save as Preset…") {
+                    name = model.activePreset.map { $0.builtIn ? "" : $0.name } ?? ""
+                    naming = true
+                }
+                .controlButton()
+                Spacer()
+                if let preset = model.activePreset, !preset.builtIn {
+                    Button("Delete", role: .destructive) { model.deletePreset(preset) }
+                        .controlButton(tint: .red)
+                        .help("Delete the preset \(preset.name)")
+                }
+            }
+        }
+        .alert("Save preset", isPresented: $naming) {
+            TextField("Preset name", text: $name)
+            Button("Save") { model.savePreset(named: name) }
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saves the formats, compression, audio, frame rate, size, and speed (\(model.presetSummary)). Saving with an existing name replaces it.")
+        }
+    }
+}
+
 struct CompressView: View {
     @Bindable var model: CompressModel
 
     var body: some View {
         HStack(spacing: 0) {
             Form {
-                Section("Preset") {
-                    HStack(spacing: 10) {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(model.activePreset?.name ?? "Your own settings")
-                            Text(model.activePreset?.detail ?? "Not saved as a preset yet")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer(minLength: 8)
-                        PresetMenu(model: model, title: "Change")
-                    }
-                }
+                PresetSection(model: model)
                 CodecSettingsSection(settings: $model.settings)
                 DestinationSection()
             }

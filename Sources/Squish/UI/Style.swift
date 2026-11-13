@@ -546,8 +546,6 @@ private struct PanelButtonBackground: ViewModifier {
 /// Pick a built-in or saved preset, save the current settings as a preset, or delete one of yours.
 struct PresetMenu: View {
     @Bindable var model: CompressModel
-    /// Button text; defaults to the active preset's name, or "Presets" when the settings match none.
-    var title: String? = nil
     @State private var naming = false
     @State private var name = ""
 
@@ -575,7 +573,7 @@ struct PresetMenu: View {
             }
         } label: {
             HStack(spacing: 6) {
-                Text(title ?? model.activePreset?.name ?? "Presets")
+                Text(model.activePreset?.name ?? "Presets")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
