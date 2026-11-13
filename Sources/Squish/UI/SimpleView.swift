@@ -323,14 +323,14 @@ struct FFmpegSetupCard: View {
                     NSPasteboard.general.setString("brew install ffmpeg", forType: .string)
                     copied = true
                 }
-                .controlSize(.small)
+                .controlButton()
             }
             .padding(.horizontal, 10).padding(.vertical, 6)
             .background(RoundedRectangle(cornerRadius: Radius.small).fill(Color.primary.opacity(0.06)))
             HStack {
                 Link("No Homebrew? Get it at brew.sh", destination: URL(string: "https://brew.sh")!).font(.subheadline)
                 Spacer()
-                Button("Check again", action: recheck).controlSize(.small)
+                Button("Check again", action: recheck).controlButton()
             }
         }
         .padding(12)

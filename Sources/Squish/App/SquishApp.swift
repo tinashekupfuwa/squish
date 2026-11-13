@@ -281,7 +281,7 @@ struct MissingToolsBanner: View {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text("Squish needs FFmpeg, a free video tool. Install it with `brew install ffmpeg` in Terminal, or set its location in Settings.").font(.callout)
             Spacer()
-            Button("Check again", action: recheck)
+            Button("Check again", action: recheck).controlButton()
         }
         .padding(10)
         .background(.orange.opacity(0.12))

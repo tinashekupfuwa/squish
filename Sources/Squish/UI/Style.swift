@@ -41,8 +41,8 @@ extension View {
     }
 
     @ViewBuilder
-    func controlButton(prominent: Bool = false) -> some View {
-        if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
+    func controlButton(prominent: Bool = false, tint: Color? = nil) -> some View {
+        buttonStyle(PanelButtonStyle(primary: prominent, tint: tint, compact: true))
     }
 
     func clearFormBackground() -> some View { formStyle(.grouped).scrollContentBackground(.hidden).controlSize(.small).font(.callout) }
@@ -246,7 +246,7 @@ struct TransportControls: View {
                         .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
                         .frame(minWidth: compact ? 20 : nil)
                 }
-                .controlButton()
+                .controlButton(tint: .red)
                 .help("Stop (⌘.)")
                 .keyboardShortcut(".", modifiers: .command)
             } else {
@@ -256,7 +256,6 @@ struct TransportControls: View {
                     .disabled(!canStart)
             }
         }
-        .controlSize(.large)
     }
 }
 
@@ -511,16 +510,20 @@ struct CapsLabel: View {
 }
 
 /// High-contrast pill for the main action, quiet capsule for secondary ones. Adapts to light and dark.
+/// The app's one button language: capsules. Primary is solid; secondary is a glass pill.
+/// Full width for the main actions, compact (sized to the label) for toolbars and inline actions.
 struct PanelButtonStyle: ButtonStyle {
     var primary = false
     var tint: Color? = nil
+    var compact = false
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.body.weight(.semibold))
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
+            .font(compact ? .callout.weight(.semibold) : .body.weight(.semibold))
+            .frame(minWidth: compact ? 18 : nil, maxWidth: compact ? nil : .infinity)
+            .padding(.horizontal, compact ? 14 : 0)
+            .padding(.vertical, compact ? 7 : 11)
             .foregroundStyle(primary ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(tint ?? Color.primary))
             .modifier(PanelButtonBackground(primary: primary))
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)

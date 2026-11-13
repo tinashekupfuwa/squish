@@ -72,9 +72,9 @@ struct AuditView: View {
                         }
                     }
                     Spacer()
-                    if model.isRunning { Button("Cancel", role: .cancel) { model.cancel() } }
+                    if model.isRunning { Button("Cancel", role: .cancel) { model.cancel() }.controlButton() }
                     Button(model.isRunning ? "Auditing…" : "Run audit") { model.start() }
-                        .buttonStyle(.borderedProminent)
+                        .controlButton(prominent: true)
                         .keyboardShortcut(.defaultAction)
                         .disabled(model.isRunning || (model.options.project == nil && model.options.startURL.trimmingCharacters(in: .whitespaces).isEmpty))
                 }

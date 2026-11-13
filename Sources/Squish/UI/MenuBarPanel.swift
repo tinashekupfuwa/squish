@@ -58,9 +58,8 @@ struct MenuBarPanel: View {
                         .frame(width: 52)
                 } else {
                     Button { model.start() } label: { Label("Start", systemImage: "play.fill") }
-                        .buttonStyle(PanelButtonStyle())
+                        .buttonStyle(PanelButtonStyle(primary: !model.pending.isEmpty))
                         .disabled(model.pending.isEmpty)
-                        .opacity(model.pending.isEmpty ? 0.5 : 1)
                 }
             }
 
@@ -68,7 +67,7 @@ struct MenuBarPanel: View {
                 openWindow(id: "main")
                 NSApp.activate(ignoringOtherApps: true)
             } label: { Text("Open Squish") }
-            .buttonStyle(PanelButtonStyle(primary: true))
+            .buttonStyle(PanelButtonStyle())
 
             HStack {
                 Spacer()

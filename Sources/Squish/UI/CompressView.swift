@@ -87,10 +87,21 @@ struct CompressView: View {
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
                 Button("Clear all", role: .destructive) { withAnimation(.spring) { model.jobs.removeAll { $0.state != .running } } }.disabled(model.jobs.isEmpty)
-            } label: { Image(systemName: "ellipsis") }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.callout.weight(.semibold))
+                    .frame(minWidth: 18, minHeight: 16)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(0.07)))
+                    .contentShape(Capsule())
+            }
             .menuStyle(.button)
-            .controlButton()
+            .buttonStyle(.plain)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .help("More actions")
+            .accessibilityLabel("More actions")
             TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
                               canStart: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty,
                               startTitle: "Start",
