@@ -45,7 +45,7 @@ extension View {
         if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
     }
 
-    func clearFormBackground() -> some View { formStyle(.grouped) }
+    func clearFormBackground() -> some View { formStyle(.grouped).controlSize(.small).font(.callout) }
 }
 
 extension AnyTransition {

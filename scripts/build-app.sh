@@ -31,8 +31,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundleExecutable</key><string>Squish</string>
   <key>CFBundleIconFile</key><string>Squish</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>1.8</string>
-  <key>CFBundleVersion</key><string>9</string>
+  <key>CFBundleShortVersionString</key><string>1.9</string>
+  <key>CFBundleVersion</key><string>10</string>
   <key>CFBundleDocumentTypes</key>
   <array>
     <dict>

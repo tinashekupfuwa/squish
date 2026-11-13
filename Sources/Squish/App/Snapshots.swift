@@ -20,6 +20,7 @@ enum Snapshots {
             ("simple-stopping", AnyView(SimpleView(model: stopping.compress).environment(stopping)), AppSize.simple),
             ("menubar", AnyView(MenuBarPanel().environment(busy)), NSSize(width: 320, height: 470)),
             ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: AppSize.advanced.width - 200, height: AppSize.advanced.height - 52)),
+            ("advanced-sidebar", AnyView(Sidebar(section: .constant(.compress)).padding(.top, 40).environment(busy)), NSSize(width: 200, height: AppSize.advanced.height)),
         ]
         for (base, view, size) in shots {
           for dark in [false, true] {

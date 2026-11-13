@@ -182,28 +182,9 @@ struct ContentView: View {
     var body: some View {
         @Bindable var state = state
         NavigationSplitView(columnVisibility: .constant(.all)) {
-            List(selection: $state.section) {
-                ForEach(AppSection.allCases) { section in
-                    Label {
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(section.title)
-                            Text(section.subtitle).font(.caption).foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: section.symbol)
-                    }
-                    .padding(.vertical, 3)
-                    .tag(section)
-                }
-            }
-            .listStyle(.sidebar)
-            .toolbar(removing: .sidebarToggle)
-            .safeAreaInset(edge: .bottom) {
-                ModeSwitch(width: 176)
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 12)
-            }
-            .navigationSplitViewColumnWidth(200)
+            Sidebar(section: $state.section)
+                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(200)
         } detail: {
             VStack(spacing: 0) {
                 if !toolsFound {
@@ -220,6 +201,72 @@ struct ContentView: View {
             .navigationTitle((state.section ?? .compress).title)
             .toolbar(.visible, for: .windowToolbar)
         }
+    }
+}
+
+/// Compact navigation: app name, two labelled groups of single-line rows, and the mode switch at the bottom.
+struct Sidebar: View {
+    @Binding var section: AppSection?
+    @State private var hovered: AppSection?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                AppGlyph(size: 20)
+                Text("Squish").font(.system(size: 13, weight: .semibold))
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 16)
+            group("Videos", [.compress, .compare])
+            group("Projects", [.audit, .optimize])
+            Spacer(minLength: 0)
+            ModeSwitch(width: 176)
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 4)
+        .padding(.bottom, 12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private func group(_ title: String, _ sections: [AppSection]) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(title)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 8)
+                .padding(.bottom, 4)
+            ForEach(sections) { row($0) }
+        }
+        .padding(.bottom, 16)
+    }
+
+    private func row(_ item: AppSection) -> some View {
+        let selected = (section ?? .compress) == item
+        let index = AppSection.allCases.firstIndex(of: item)! + 1
+        return Button { section = item } label: {
+            HStack(spacing: 8) {
+                Image(systemName: item.symbol)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(selected ? AnyShapeStyle(Brand.indigo) : AnyShapeStyle(.secondary))
+                    .frame(width: 16)
+                Text(item.title)
+                    .font(.system(size: 13, weight: selected ? .medium : .regular))
+                    .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.primary.opacity(0.78)))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: Radius.small)
+                    .fill(Color.primary.opacity(selected ? 0.08 : hovered == item ? 0.04 : 0))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovered = $0 ? item : (hovered == item ? nil : hovered) }
+        .keyboardShortcut(KeyEquivalent(Character("\(index)")), modifiers: .command)
+        .help("\(item.subtitle)  ⌘\(index)")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
