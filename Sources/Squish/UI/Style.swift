@@ -1,6 +1,13 @@
 import AppKit
 import SwiftUI
 
+/// The app's corner radii: cards and panels, rows and controls inside them, and small insets. Pills use Capsule.
+enum Radius {
+    static let card: CGFloat = 16
+    static let row: CGFloat = 12
+    static let small: CGFloat = 8
+}
+
 enum Brand {
     static let teal = Color(red: 0.11, green: 0.71, blue: 0.67)
     static let indigo = Color(red: 0.38, green: 0.33, blue: 0.90)
@@ -25,7 +32,7 @@ enum Brand {
 
 extension View {
     /// A quiet card surface that keeps text contrast in light and dark appearance.
-    func surfaceCard(cornerRadius: CGFloat = 14, tint: Color? = nil) -> some View {
+    func surfaceCard(cornerRadius: CGFloat = Radius.card, tint: Color? = nil) -> some View {
         background {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(tint.map { $0.opacity(0.08) } ?? Color.primary.opacity(0.04))
@@ -85,6 +92,53 @@ struct TickBar: View {
         guard running || value > 0 else { return Color.primary.opacity(0.08) }
         let distance = Double(i - filled)
         return Color.primary.opacity(max(0.1, 0.42 - distance * 0.08))
+    }
+}
+
+/// One segment per video in the queue, each filling with that video's progress. A single video is one solid bar.
+struct SegmentedProgressBar: View {
+    var segments: [Double]
+    var active: Int?
+    var failed: Set<Int> = []
+    var paused = false
+    var done = false
+    var tint: Color = Brand.green
+    var height: CGFloat = 14
+
+    var body: some View {
+        GeometryReader { geo in
+            let count = max(segments.count, 1)
+            let spacing = min(5, geo.size.width / CGFloat(count) * 0.25)
+            let width = (geo.size.width - spacing * CGFloat(count - 1)) / CGFloat(count)
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: active == nil || paused)) { timeline in
+                let pulse = (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
+                HStack(spacing: spacing) {
+                    ForEach(0..<count, id: \.self) { i in
+                        segment(i, width: width, pulse: pulse)
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .animation(.easeInOut(duration: 0.25), value: segments)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(segments.filter { $0 >= 1 }.count) of \(segments.count) videos done")
+    }
+
+    private func segment(_ i: Int, width: CGFloat, pulse: Double) -> some View {
+        let value = i < segments.count ? min(max(segments[i], 0), 1) : 0
+        let fill: Color = failed.contains(i) ? .red : paused ? Brand.amber : done ? Brand.green : tint
+        let isActive = i == active && !paused
+        return ZStack(alignment: .leading) {
+            Capsule().fill(isActive ? fill.opacity(0.18 + 0.2 * pulse) : Color.primary.opacity(0.1))
+            Capsule()
+                .fill(fill)
+                .frame(width: max(value > 0 ? height : 0, width * value))
+                .shadow(color: fill.opacity(isActive ? 0.35 + 0.45 * pulse : 0), radius: 5)
+                .opacity(failed.contains(i) ? 0.5 : 1)
+        }
+        .frame(width: width, height: height)
     }
 }
 
@@ -274,12 +328,12 @@ struct QualityRuler: View {
             }
             HStack(alignment: .top, spacing: 12) {
                 Text("\(compression)")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+                    .font(.system(size: 34, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
                     .lineLimit(1)
                     .fixedSize()
-                    .frame(width: 48, height: 40, alignment: .leading)
+                    .frame(width: 64, height: 40, alignment: .leading)
                     .contentTransition(.numericText(value: Double(compression)))
                 GeometryReader { geo in
                     let width = geo.size.width
@@ -331,8 +385,8 @@ struct QualityRuler: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 22).fill(Color.primary.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
+            .background(RoundedRectangle(cornerRadius: Radius.card).fill(Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Compression")
             .accessibilityValue("\(compression), \(presetName)")
@@ -381,7 +435,7 @@ struct PanelCard<Content: View>: View {
         content
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .surfaceCard(cornerRadius: 18)
+            .surfaceCard()
     }
 }
 

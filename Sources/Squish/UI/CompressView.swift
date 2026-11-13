@@ -63,7 +63,13 @@ struct CompressView: View {
                             .contentTransition(.numericText())
                     }
                 }
-                MiniTickBar(value: model.overallProgress, paused: model.isPaused || model.isStopping, height: 8, tint: Brand.green)
+                SegmentedProgressBar(
+                    segments: model.jobs.map { $0.state == .done || $0.state == .failed ? 1 : $0.progress },
+                    active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
+                    failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
+                    paused: model.isPaused || model.isStopping,
+                    height: 8
+                )
             }
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
@@ -82,7 +88,7 @@ struct CompressView: View {
                               stop: model.stop)
         }
         .padding(12)
-        .surfaceCard(cornerRadius: 18)
+        .surfaceCard()
         .animation(.easeInOut(duration: 0.25), value: model.overallProgress)
     }
 
@@ -174,7 +180,7 @@ struct JobRow: View {
             }
         }
         .padding(12)
-        .surfaceCard(cornerRadius: 14, tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
+        .surfaceCard(tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.state)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.outputs.count)
     }

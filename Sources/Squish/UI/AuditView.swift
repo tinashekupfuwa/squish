@@ -164,7 +164,7 @@ struct VideoCard: View {
             }
         }
         .padding(12)
-        .surfaceCard(cornerRadius: 14)
+        .surfaceCard()
         .textSelection(.enabled)
     }
 

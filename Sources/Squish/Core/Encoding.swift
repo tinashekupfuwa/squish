@@ -83,7 +83,7 @@ struct EncodeSettings: Codable, Equatable, Sendable {
     var crf: [Codec: Int] = [.vp9: 42, .h265: 30, .av1: 42]
     var audio: AudioMode = .auto
     var frameRate: FrameRateMode = .preserve
-    var tenBit = false
+    var tenBit = true
     var maxWidth: Int? = nil
     var speed: SpeedMode = .skill
 

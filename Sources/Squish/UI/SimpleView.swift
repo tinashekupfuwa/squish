@@ -28,7 +28,13 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 30)
+            SegmentedProgressBar(
+                segments: model.jobs.map { $0.state == .done ? 1 : $0.state == .failed ? 1 : $0.progress },
+                active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
+                failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
+                paused: model.isPaused || model.isStopping,
+                done: finished
+            )
         }
     }
 
@@ -113,8 +119,8 @@ struct SimpleView: View {
                     Text("or click to choose").font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
-                .contentShape(RoundedRectangle(cornerRadius: 18))
+                .background(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                .contentShape(RoundedRectangle(cornerRadius: Radius.card))
             }
             .buttonStyle(.plain)
             .frame(maxHeight: .infinity)
@@ -219,7 +225,7 @@ struct SimpleJobRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(hovering ? 0.07 : 0.04)))
+        .background(RoundedRectangle(cornerRadius: Radius.row).fill(Color.primary.opacity(hovering ? 0.07 : 0.04)))
         .onHover { hovering = $0 }
         .help(job.error ?? job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" }.joined(separator: "\n"))
         .onTapGesture(count: 2) { if !job.outputs.isEmpty { Finder.reveal(job.outputs.map(\.url)) } }
@@ -254,7 +260,7 @@ struct SimpleJobRow: View {
         case .failed: return job.error ?? "Failed"
         case .cancelled: return "Stopped · will restart"
         default:
-            return job.probe.map { "\($0.dimensions) · \(Fmt.duration($0.duration)) · \(Fmt.bytes($0.bytes))" } ?? "Waiting"
+            return job.probe.map { "\($0.dimensions)\($0.bitDepth > 8 ? " · \($0.bitDepth)-bit" : "") · \(Fmt.duration($0.duration)) · \(Fmt.bytes($0.bytes))" } ?? "Waiting"
         }
     }
 
@@ -319,7 +325,7 @@ struct OutputFolderRow: View {
         .menuStyle(.button)
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
-        .surfaceCard(cornerRadius: 12)
+        .surfaceCard(cornerRadius: Radius.row)
         .help("Choose where compressed videos are saved")
     }
 }

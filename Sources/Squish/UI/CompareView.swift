@@ -189,19 +189,19 @@ struct CompareView: View {
             }
         }
         .padding(14)
-        .surfaceCard(cornerRadius: 16)
+        .surfaceCard()
         .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
     }
 
     private func thumbnail(_ image: URL, title: String, url: URL) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if let nsImage = NSImage(contentsOf: image) {
-                Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: 6))
+                Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit).clipShape(RoundedRectangle(cornerRadius: Radius.small))
             }
             Text(title).font(.caption)
         }
         .padding(6)
-        .surfaceCard(cornerRadius: 10)
+        .surfaceCard(cornerRadius: Radius.row)
         .onTapGesture { Finder.open(url) }
         .help("Open preview")
     }

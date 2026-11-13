@@ -121,9 +121,9 @@ struct RootView: View {
         }
         .overlay {
             if dropTargeted {
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: Radius.card)
                     .strokeBorder(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, dash: [8, 6]))
-                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+                    .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: Radius.card))
                     .overlay {
                         Label("Drop to add videos", systemImage: "plus.circle.fill")
                             .font(.title3.weight(.semibold))

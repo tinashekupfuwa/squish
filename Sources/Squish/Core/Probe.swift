@@ -54,13 +54,17 @@ struct ProbeInfo: Hashable, Sendable {
     var dimensions: String { "\(width)×\(height)" }
     var pixels: Int { width * height }
     var aspect: Double { height > 0 ? Double(width) / Double(height) : 0 }
-    var bitDepth: Int { pixFmt.contains("10") ? 10 : pixFmt.contains("12") ? 12 : 8 }
+    var bitDepth: Int {
+        guard let match = pixFmt.firstMatch(of: #/(\d+)(le|be)$/#), let depth = Int(match.1) else { return 8 }
+        return depth
+    }
 
     var summary: String {
         var parts = [dimensions]
         if let fps { parts.append("\(fps.pretty) fps") }
         parts.append(Fmt.duration(duration))
         parts.append(videoCodec.uppercased())
+        parts.append("\(bitDepth)-bit")
         parts.append(audio.isEmpty ? "no audio" : "audio")
         parts.append(Fmt.bytes(bytes))
         return parts.joined(separator: " · ")

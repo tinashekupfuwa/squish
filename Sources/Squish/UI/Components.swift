@@ -53,9 +53,9 @@ struct DropZone: View {
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .surfaceCard(cornerRadius: 16, tint: targeted ? .accentColor : nil)
+        .surfaceCard(tint: targeted ? .accentColor : nil)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: Radius.card)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
                 .foregroundStyle(targeted ? Color.accentColor : Color.secondary.opacity(0.35))
         )
@@ -124,6 +124,7 @@ struct CodecSettingsSection: View {
             }
             if showResize { OptionalIntField(label: "Max width (px)", value: $settings.maxWidth) }
             Toggle("10-bit output", isOn: $settings.tenBit)
+                .help("Highest bit depth web players support. Keeps gradients smooth and preserves 10-bit and 12-bit sources as closely as possible.")
             Picker("Encoder speed", selection: $settings.speed) {
                 ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
             }
@@ -157,7 +158,7 @@ struct LogView: View {
                 .padding(8)
             }
             .frame(minHeight: 70, maxHeight: 140)
-            .surfaceCard(cornerRadius: 10)
+            .surfaceCard(cornerRadius: Radius.row)
             .onChange(of: lines.count) { _, count in proxy.scrollTo(count - 1, anchor: .bottom) }
         }
     }
@@ -172,7 +173,7 @@ struct CodeBlock: View {
             Button { Finder.copy(text) } label: { Image(systemName: "doc.on.doc") }.buttonStyle(.borderless).help("Copy")
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 6).fill(Color.secondary.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: Radius.small).fill(Color.secondary.opacity(0.08)))
     }
 }
 

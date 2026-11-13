@@ -121,7 +121,7 @@ struct PlanView: View {
                         ForEach(video.notes, id: \.self) { Label($0, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
                     }
                     .padding(12)
-                    .surfaceCard(cornerRadius: 14)
+                    .surfaceCard()
                 }
                 if !plan.edits.isEmpty {
                     Text("Source edits").font(.headline)
@@ -136,7 +136,7 @@ struct PlanView: View {
                             }
                         }
                         .padding(8)
-                        .surfaceCard(cornerRadius: 10)
+                        .surfaceCard(cornerRadius: Radius.row)
                         .textSelection(.enabled)
                     }
                 }
