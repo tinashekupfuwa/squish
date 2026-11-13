@@ -26,6 +26,7 @@ final class CompressModel {
     var settings = EncodeSettings()
     var isRunning = false
     var isPaused = false
+    var isStopping = false
     /// 0 (smallest files) to 100 (best quality); 50 is the skill's defaults.
     var quality = 50 {
         didSet { applyQuality() }
@@ -112,6 +113,7 @@ final class CompressModel {
             }
             isRunning = false
             isPaused = false
+            isStopping = false
         }
     }
 
@@ -128,6 +130,9 @@ final class CompressModel {
     }
 
     func stop() {
+        guard isRunning, !isStopping else { return }
+        isStopping = true
+        currentJob?.status = "Stopping…"
         task?.cancel()
         control.resume()
         isPaused = false
@@ -171,9 +176,10 @@ final class CompressModel {
             job.progress = 1
             job.state = .done
             job.status = "Done"
-        } catch is CancellationError {
+        } catch where error is CancellationError || Task.isCancelled {
             job.state = .cancelled
-            job.status = "Cancelled"
+            job.status = "Stopped"
+            job.progress = 0
         } catch {
             job.state = .failed
             job.status = "Failed"

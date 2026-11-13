@@ -10,9 +10,14 @@ enum Snapshots {
         let busy = AppState()
         fill(busy.compress)
         busy.compress.quality = 35
+        let stopping = AppState()
+        fill(stopping.compress)
+        stopping.compress.isStopping = true
+        stopping.compress.quality = 0
         let shots: [(String, AnyView, NSSize)] = [
             ("simple-empty", AnyView(SimpleView(model: empty.compress).environment(empty)), AppSize.simple),
             ("simple-running", AnyView(SimpleView(model: busy.compress).environment(busy)), AppSize.simple),
+            ("simple-stopping", AnyView(SimpleView(model: stopping.compress).environment(stopping)), AppSize.simple),
             ("menubar", AnyView(MenuBarPanel().environment(busy)), NSSize(width: 320, height: 470)),
             ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: AppSize.advanced.width - 200, height: AppSize.advanced.height - 52)),
         ]

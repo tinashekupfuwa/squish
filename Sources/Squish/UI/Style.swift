@@ -7,6 +7,7 @@ enum Brand {
     static let lightPurple = Color(red: 0.78, green: 0.69, blue: 1.00)
     static let darkPurple = Color(red: 0.36, green: 0.13, blue: 0.70)
     static let amber = Color(red: 0.96, green: 0.68, blue: 0.16)
+    static let orange = Color(red: 0.98, green: 0.55, blue: 0.18)
     static let green = Color(red: 0.20, green: 0.74, blue: 0.42)
 
     /// Linear blend between two colors in sRGB, t in 0...1.
@@ -42,7 +43,7 @@ extension AnyTransition {
     static var card: AnyTransition { .opacity }
 }
 
-/// Rounded ticks that fill from the left in the brand gradient. Amber while paused, green when done.
+/// Rounded ticks that fill from the left in orange. Amber while paused or stopping, green when done.
 struct TickBar: View {
     var value: Double
     var paused = false
@@ -75,10 +76,12 @@ struct TickBar: View {
     }
 
     private func color(_ i: Int, count: Int, filled: Int, pulse: Double) -> Color {
-        let fill: Color = paused ? Brand.amber : done ? Brand.green : Brand.mix(Brand.teal, Brand.indigo, Double(i) / Double(max(count - 1, 1)))
+        let fill: Color = paused ? Brand.amber : done ? Brand.green : Brand.orange
         if i < filled { return fill }
         if i == filled && running && !paused { return fill.opacity(0.3 + 0.55 * pulse) }
-        return Color.primary.opacity(0.11)
+        guard running || value > 0 else { return Color.primary.opacity(0.1) }
+        let distance = Double(i - filled)
+        return Color.primary.opacity(max(0.1, 0.42 - distance * 0.08))
     }
 }
 
@@ -100,13 +103,16 @@ struct TransportControls: View {
     let canStart: Bool
     let startTitle: String
     var compact = false
+    var isStopping = false
     let start: () -> Void
     let togglePause: () -> Void
     let stop: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
-            if isRunning {
+            if isStopping {
+                StoppingIndicator()
+            } else if isRunning {
                 Button(action: togglePause) {
                     Label(isPaused ? "Resume" : "Pause", systemImage: isPaused ? "play.fill" : "pause.fill")
                         .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
@@ -131,6 +137,21 @@ struct TransportControls: View {
             }
         }
         .controlSize(.large)
+    }
+}
+
+/// Shown the moment Stop is pressed, until the encoder has shut down.
+struct StoppingIndicator: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small)
+            Text("Stopping…").font(.body.weight(.semibold))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .foregroundStyle(.red)
+        .background(Capsule().fill(Color.red.opacity(0.12)))
+        .accessibilityLabel("Stopping")
     }
 }
 
@@ -213,6 +234,8 @@ struct PillSegmented: View {
 /// The binding is the encoder quality (0 = smallest files, 100 = best quality); the ruler shows compression = 100 - quality.
 struct QualityRuler: View {
     @Binding var quality: Int
+    @State private var lastTick = -1
+    @Environment(\.colorScheme) private var scheme
     private let ticks = 28
     private let presets: [(String, Int)] = [("Light", 20), ("Balanced", 50), ("Strong", 80)]
 
@@ -223,8 +246,9 @@ struct QualityRuler: View {
     }
 
     /// Same hue family, kept dark enough to read as text on light and dark backgrounds.
-    static func textColor(at compression: Double) -> Color {
-        Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.55 + compression / 250)
+    static func textColor(at compression: Double, dark: Bool = false) -> Color {
+        dark ? Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.1 + compression / 330)
+             : Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.55 + compression / 250)
     }
 
     var body: some View {
@@ -237,8 +261,9 @@ struct QualityRuler: View {
                     } label: {
                         Text(name)
                             .font(.callout.weight(selected ? .semibold : .regular))
-                            .foregroundStyle(selected ? AnyShapeStyle(Self.textColor(at: Double(target))) : AnyShapeStyle(.secondary))
+                            .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                             .frame(maxWidth: .infinity)
+                            .animation(.easeOut(duration: 0.2), value: selected)
                     }
                     .buttonStyle(.plain)
                 }
@@ -247,8 +272,10 @@ struct QualityRuler: View {
                 Text("\(compression)")
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Self.textColor(at: Double(compression)))
-                    .frame(width: 38, alignment: .leading)
+                    .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
+                    .lineLimit(1)
+                    .fixedSize()
+                    .frame(width: 48, alignment: .leading)
                     .contentTransition(.numericText(value: Double(compression)))
                 GeometryReader { geo in
                     let width = geo.size.width
@@ -272,6 +299,7 @@ struct QualityRuler: View {
                             .shadow(color: Self.color(at: Double(compression)).opacity(0.6), radius: 4)
                             .offset(x: x - 1.5)
                     }
+                    .animation(.spring(response: 0.28, dampingFraction: 0.82), value: compression)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
                         let c = Int((min(max(drag.location.x / width, 0), 1) * 100).rounded())
@@ -306,6 +334,18 @@ struct QualityRuler: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.2), value: presetName)
+        }
+        .onChange(of: compression) { old, new in
+            let tick = Int((Double(new) / 100 * Double(ticks)).rounded())
+            let crossedPreset = presets.contains { (min(old, new)...max(old, new)).contains($0.1) && old != $0.1 } || new == 0 || new == 100
+            if crossedPreset {
+                NSHapticFeedbackManager.defaultPerformer.perform(.levelChange, performanceTime: .now)
+            } else if tick != lastTick {
+                NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+            }
+            lastTick = tick
         }
     }
 

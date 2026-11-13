@@ -35,10 +35,10 @@ enum CLI {
         let log: @Sendable (String) -> Void = { FileHandle.standardError.write(Data(($0 + "\n").utf8)) }
         switch command {
         case "compress":
-            guard !positional.isEmpty else { throw ToolError.message("usage: Squish compress <file>… [--av1] [--preserve-fps] [--faster]") }
+            guard !positional.isEmpty else { throw ToolError.message("usage: Squish compress <file>… [--av1] [--cap-fps] [--faster]") }
             var settings = EncodeSettings()
             settings.av1 = flags.contains("--av1")
-            if flags.contains("--preserve-fps") { settings.frameRate = .preserve }
+            if flags.contains("--cap-fps") { settings.frameRate = .cap }
             if flags.contains("--faster") { settings.speed = .faster }
             for path in positional {
                 let input = URL(fileURLWithPath: path)
@@ -104,7 +104,7 @@ enum CLI {
         default:
             print("""
             Squish: compress, compare, audit, and optimize web videos with FFmpeg.
-              Squish compress <file>… [--av1] [--preserve-fps] [--faster]
+              Squish compress <file>… [--av1] [--cap-fps] [--faster]
               Squish compare <file> [--av1] [--psnr] [--faster]
               Squish audit <folder> [url] [--pages=N] [--originals=DIR]
               Squish optimize <folder> [url] [--pages=N] [--originals=DIR] [--faster] [--apply]

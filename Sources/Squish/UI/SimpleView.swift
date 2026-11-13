@@ -28,7 +28,7 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused, running: model.isRunning, done: finished, height: 20)
+            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, height: 20)
         }
     }
 
@@ -41,13 +41,14 @@ struct QueueStatus: View {
     private var unit: String { finished ? "% smaller" : "%" }
 
     private var headline: String {
+        if model.isStopping { return "Stopping…" }
         if model.isPaused { return "Paused" }
         if model.isRunning { return "Compressing" }
         if finished { return "Saved \(Fmt.bytes(model.savedBytes))" }
         if model.jobs.isEmpty { return "Ready" }
         return "\(model.pending.count) waiting"
     }
-    private var headlineColor: Color { model.isPaused ? Brand.amber : model.isRunning ? Brand.indigo : finished ? Brand.green : .primary }
+    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.orange : finished ? Brand.green : .primary }
 
     private var detail: String {
         if let job = model.currentJob { return "\(job.url.lastPathComponent) · \(model.doneJobs.count + 1) of \(model.jobs.count)" }
@@ -64,13 +65,12 @@ struct SimpleView: View {
     var body: some View {
         VStack(spacing: 12) {
             HStack(spacing: 10) {
-                AppGlyph(size: 26)
+                AppGlyph(size: 28)
                 Text("Squish").font(.title3.weight(.semibold)).fixedSize()
                 Spacer(minLength: 8)
-                ModeSwitch(width: 150)
+                ModeSwitch(width: 160)
             }
-            .padding(.leading, 64)
-            .frame(height: 28)
+            .frame(height: 32)
 
             if !toolsFound {
                 Text("Install FFmpeg first: brew install ffmpeg").font(.callout).foregroundStyle(.orange)
@@ -93,10 +93,8 @@ struct SimpleView: View {
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
-        .padding(.top, 2)
+        .padding(.top, 4)
         .toolbar(.hidden, for: .windowToolbar)
-        .ignoresSafeArea(.container, edges: .top)
-        .padding(.top, 10)
     }
 
     @ViewBuilder
@@ -131,7 +129,7 @@ struct SimpleView: View {
                 ScrollView {
                     VStack(spacing: 6) {
                         ForEach(model.jobs) { job in
-                            SimpleJobRow(job: job, paused: model.isPaused && job.state == .running) {
+                            SimpleJobRow(job: job, paused: model.isPaused && job.state == .running, stopping: model.isStopping && job.state == .running) {
                                 withAnimation(.spring(response: 0.3)) { model.remove(job) }
                             }
                             .transition(.opacity)
@@ -146,7 +144,18 @@ struct SimpleView: View {
 
     private var controls: some View {
         HStack(spacing: 8) {
-            if model.isRunning {
+            if model.isStopping {
+                HStack(spacing: 10) {
+                    ProgressView().controlSize(.small)
+                    Text("Stopping…")
+                }
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Capsule().fill(Color.red.opacity(0.12)))
+                .transition(.opacity)
+            } else if model.isRunning {
                 Button { model.isPaused ? model.resume() : model.pause() } label: {
                     Label(model.isPaused ? "Resume" : "Pause", systemImage: model.isPaused ? "play.fill" : "pause.fill")
                 }
@@ -170,6 +179,7 @@ struct SimpleView: View {
 struct SimpleJobRow: View {
     let job: CompressJob
     let paused: Bool
+    var stopping = false
     let remove: () -> Void
     @State private var hovering = false
 
@@ -182,7 +192,7 @@ struct SimpleJobRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.url.lastPathComponent).font(.callout.weight(.medium)).lineLimit(1).truncationMode(.middle)
                 if job.state == .running {
-                    MiniTickBar(value: job.progress, paused: paused, height: 9)
+                    MiniTickBar(value: job.progress, paused: paused || stopping, height: 9)
                         .padding(.top, 2)
                 } else {
                     Text(subtitle).font(.caption).foregroundStyle(job.state == .failed ? .red : .secondary).lineLimit(1)
@@ -201,7 +211,9 @@ struct SimpleJobRow: View {
 
     @ViewBuilder
     private var trailing: some View {
-        if job.state == .running {
+        if stopping {
+            Text("Stopping…").font(.caption.weight(.semibold)).foregroundStyle(.red)
+        } else if job.state == .running {
             Text("\(Int((job.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
         } else if job.state == .done, let smallest = job.outputs.map(\.bytes).min(), let source = job.outputs.first?.sourceBytes, source > 0 {
             HStack(spacing: 6) {
@@ -246,7 +258,7 @@ struct SimpleJobRow: View {
         switch job.state {
         case .done: return Brand.green
         case .failed: return .red
-        case .running: return Brand.indigo
+        case .running: return Brand.orange
         default: return .secondary
         }
     }

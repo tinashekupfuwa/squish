@@ -65,9 +65,9 @@ enum AudioMode: String, CaseIterable, Identifiable, Sendable {
 }
 
 enum FrameRateMode: String, CaseIterable, Identifiable, Sendable {
-    case cap, preserve
+    case preserve, cap
     var id: String { rawValue }
-    var label: String { self == .cap ? "Cap at ~30 fps (recommended for web)" : "Preserve motion" }
+    var label: String { self == .preserve ? "Same as source" : "Cap at ~30 fps (smaller files)" }
 }
 
 enum SpeedMode: String, CaseIterable, Identifiable, Sendable {
@@ -82,7 +82,7 @@ struct EncodeSettings: Sendable {
     var av1 = false
     var crf: [Codec: Int] = [.vp9: 42, .h265: 30, .av1: 42]
     var audio: AudioMode = .auto
-    var frameRate: FrameRateMode = .cap
+    var frameRate: FrameRateMode = .preserve
     var tenBit = false
     var maxWidth: Int? = nil
     var speed: SpeedMode = .skill

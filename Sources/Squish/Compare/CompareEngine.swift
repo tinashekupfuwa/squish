@@ -17,7 +17,7 @@ struct CompareOptions: Sendable {
     var sampleDuration: Double = 1
     var maxWidth: Int? = nil
     var tenBit = false
-    var frameRate: FrameRateMode = .cap
+    var frameRate: FrameRateMode = .preserve
     var speed: SpeedMode = .skill
     var psnr = false
 }

@@ -45,7 +45,9 @@ struct MenuBarPanel: View {
                     Label("Add videos", systemImage: "plus")
                 }
                 .buttonStyle(PanelButtonStyle())
-                if model.isRunning {
+                if model.isStopping {
+                    StoppingIndicator().frame(maxWidth: .infinity)
+                } else if model.isRunning {
                     Button { model.isPaused ? model.resume() : model.pause() } label: {
                         Image(systemName: model.isPaused ? "play.fill" : "pause.fill")
                     }

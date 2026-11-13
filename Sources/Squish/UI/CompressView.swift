@@ -60,7 +60,7 @@ struct CompressView: View {
                             .contentTransition(.numericText())
                     }
                 }
-                MiniTickBar(value: model.overallProgress, paused: model.isPaused, height: 8)
+                MiniTickBar(value: model.overallProgress, paused: model.isPaused || model.isStopping, height: 8)
             }
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
@@ -73,6 +73,7 @@ struct CompressView: View {
                               canStart: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty,
                               startTitle: "Start",
                               compact: true,
+                              isStopping: model.isStopping,
                               start: model.start,
                               togglePause: { model.isPaused ? model.resume() : model.pause() },
                               stop: model.stop)
@@ -85,6 +86,7 @@ struct CompressView: View {
     private var summary: String {
         let done = model.jobs.filter { $0.state == .done }.count
         let queued = model.pending.count
+        if model.isStopping { return "Stopping…" }
         if model.isPaused { return "Paused · \(done) of \(model.jobs.count) done" }
         if model.isRunning { return "Converting · \(done) of \(model.jobs.count) done" }
         if model.jobs.isEmpty { return "No videos queued" }
