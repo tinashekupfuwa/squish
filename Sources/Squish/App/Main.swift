@@ -27,7 +27,7 @@ enum Main {
 /// Headless access to the same engines the app uses, for scripts and terminals.
 @MainActor
 enum CLI {
-    static let commands: Set<String> = ["compress", "compare", "audit", "optimize", "restore", "help", "--help"]
+    static let commands: Set<String> = ["compress", "compare", "audit", "optimize", "restore", "snapshot", "help", "--help"]
 
     static func run(_ command: String, _ args: [String]) async throws {
         let flags = Set(args.filter { $0.hasPrefix("--") })
@@ -94,6 +94,10 @@ enum CLI {
                     print("(dry run; pass --apply to write changes)")
                 }
             }
+        case "snapshot":
+            let folder = URL(fileURLWithPath: positional.first ?? "squish-snapshots", isDirectory: true)
+            try Snapshots.render(to: folder)
+            print("Wrote snapshots to \(folder.path)")
         case "restore":
             guard let path = positional.first else { throw ToolError.message("usage: Squish restore <backup folder>") }
             for line in try Optimizer.restore(URL(fileURLWithPath: path, isDirectory: true)) { print(line) }

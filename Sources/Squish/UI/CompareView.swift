@@ -9,7 +9,7 @@ struct CompareView: View {
     var body: some View {
         HStack(spacing: 0) {
             settings
-                .frame(width: 350)
+                .frame(width: 320)
                 .disabled(model.isRunning)
             Divider()
             VStack(alignment: .leading, spacing: 12) {

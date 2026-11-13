@@ -26,6 +26,39 @@ final class CompressModel {
     var settings = EncodeSettings()
     var isRunning = false
     var isPaused = false
+    /// 0 (smallest files) to 100 (best quality); 50 is the skill's defaults.
+    var quality = 50 {
+        didSet { applyQuality() }
+    }
+
+    static func crf(for codec: Codec, quality: Int) -> Int {
+        let q = Double(min(max(quality, 0), 100))
+        switch codec {
+        case .h265: return Int((38 - q * 0.16).rounded())
+        case .vp9, .av1: return Int((52 - q * 0.2).rounded())
+        }
+    }
+
+    static func qualityName(_ quality: Int) -> String {
+        quality < 35 ? "Smaller files" : quality <= 65 ? "Balanced" : "Better quality"
+    }
+
+    private func applyQuality() {
+        for codec in Codec.allCases { settings.crf[codec] = Self.crf(for: codec, quality: quality) }
+    }
+
+    var currentJob: CompressJob? { jobs.first { $0.state == .running } }
+    var doneJobs: [CompressJob] { jobs.filter { $0.state == .done } }
+    var savedBytes: Int64 {
+        doneJobs.reduce(0) { total, job in
+            guard let smallest = job.outputs.map(\.bytes).min(), let source = job.outputs.first?.sourceBytes else { return total }
+            return total + max(0, source - smallest)
+        }
+    }
+    var savedRatio: Double {
+        let source = doneJobs.compactMap { $0.outputs.first?.sourceBytes }.reduce(0, +)
+        return source > 0 ? Double(savedBytes) / Double(source) : 0
+    }
     private let control = ProcessGroup()
     private var task: Task<Void, Never>?
 
@@ -38,7 +71,7 @@ final class CompressModel {
             if isDir.boolValue {
                 let items = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil)?.compactMap { $0 as? URL } ?? []
                 add(items.filter { Self.videoExtensions.contains($0.pathExtension.lowercased()) })
-            } else if !jobs.contains(where: { $0.url == url }) {
+            } else if Self.videoExtensions.contains(url.pathExtension.lowercased()), !jobs.contains(where: { $0.url == url }) {
                 let job = CompressJob(url: url)
                 jobs.append(job)
                 Task { job.probe = try? await Probe.run(url.path) }

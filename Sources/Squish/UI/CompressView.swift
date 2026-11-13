@@ -10,11 +10,11 @@ struct CompressView: View {
                 DestinationSection()
             }
             .clearFormBackground()
-            .frame(width: 340)
+            .frame(width: 320)
             .disabled(model.isRunning)
             Divider()
             VStack(spacing: 12) {
-                DropZone(title: "Add videos or folders", subtitle: "Videos wait in the queue until you press Start", onDrop: { urls in withAnimation(.spring) { model.add(urls) } }) {
+                DropZone(title: "Add videos or folders", subtitle: "Queued until you press Start", onDrop: { urls in withAnimation(.spring) { model.add(urls) } }) {
                     let urls = Panels.chooseVideos()
                     withAnimation(.spring) { model.add(urls) }
                 }
@@ -53,7 +53,7 @@ struct CompressView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    Text(summary).font(.callout.weight(.medium)).contentTransition(.numericText())
+                    Text(summary).font(.callout.weight(.medium)).lineLimit(1).contentTransition(.numericText())
                     Spacer()
                     if model.isRunning || model.overallProgress > 0 {
                         Text("\(Int((model.overallProgress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
@@ -72,6 +72,7 @@ struct CompressView: View {
             TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
                               canStart: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty,
                               startTitle: "Start",
+                              compact: true,
                               start: model.start,
                               togglePause: { model.isPaused ? model.resume() : model.pause() },
                               stop: model.stop)

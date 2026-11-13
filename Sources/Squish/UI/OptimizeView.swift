@@ -16,7 +16,7 @@ struct OptimizeView: View {
                 }
             }
             .clearFormBackground()
-            .frame(width: 360)
+            .frame(width: 330)
             .disabled(model.isRunning)
             Divider()
             VStack(alignment: .leading, spacing: 12) {

@@ -36,7 +36,7 @@ struct AuditView: View {
         HStack(spacing: 0) {
             Form { SiteInputsSection(options: $model.options) }
                 .clearFormBackground()
-                .frame(width: 360)
+                .frame(width: 330)
                 .disabled(model.isRunning)
             Divider()
             VStack(alignment: .leading, spacing: 12) {
