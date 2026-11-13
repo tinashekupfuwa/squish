@@ -79,8 +79,7 @@ struct SimpleView: View {
             .frame(height: 32)
 
             if !toolsFound {
-                Text("Install FFmpeg first: brew install ffmpeg").font(.callout).foregroundStyle(.orange)
-                    .onTapGesture { toolsFound = Tools.locate("ffmpeg") != nil }
+                FFmpegSetupCard { toolsFound = Tools.locate("ffmpeg") != nil }
             }
 
             PanelCard { QueueStatus(model: model) }
@@ -116,7 +115,13 @@ struct SimpleView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "plus.circle").font(.system(size: 28, weight: .light))
                     Text("Drop videos here").font(.headline)
-                    Text("or click to choose").font(.caption).foregroundStyle(.secondary)
+                    Text("or click to choose").font(.callout).foregroundStyle(.secondary)
+                    Text("Squish saves smaller copies that play on the web. Your original videos are never changed.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 250)
+                        .padding(.top, 10)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(RoundedRectangle(cornerRadius: Radius.card).strokeBorder(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
@@ -127,13 +132,13 @@ struct SimpleView: View {
         } else {
             VStack(spacing: 0) {
                 HStack {
-                    CapsLabel("Queue · \(model.jobs.count)")
+                    CapsLabel("Videos · \(model.jobs.count)")
                     Spacer()
                     if !model.doneJobs.isEmpty, !model.isRunning {
-                        Button("Clear done") { withAnimation(.spring(response: 0.3)) { model.clearFinished() } }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
+                        Button("Clear finished") { withAnimation(.spring(response: 0.3)) { model.clearFinished() } }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
                     }
                     Button { model.add(Panels.chooseVideos()) } label: { Image(systemName: "plus") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary).padding(.leading, 6).help("Add videos")
+                        .buttonStyle(.plain).foregroundStyle(.secondary).padding(.leading, 6).help("Add videos").accessibilityLabel("Add videos")
                 }
                 .padding(.bottom, 6)
                 ScrollView {
@@ -176,11 +181,14 @@ struct SimpleView: View {
                     .frame(width: 110)
                     .keyboardShortcut(".", modifiers: .command)
             } else {
-                Button { model.start() } label: { Label(model.pending.isEmpty && !model.jobs.isEmpty ? "All done" : "Start", systemImage: "play.fill") }
-                    .buttonStyle(PanelButtonStyle(primary: true))
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(model.pending.isEmpty)
-                    .opacity(model.pending.isEmpty ? 0.5 : 1)
+                if model.pending.isEmpty {
+                    Button { model.add(Panels.chooseVideos()) } label: { Label(model.jobs.isEmpty ? "Add videos" : "Add more videos", systemImage: "plus") }
+                        .buttonStyle(PanelButtonStyle(primary: true))
+                } else {
+                    Button { model.start() } label: { Label("Start", systemImage: "play.fill") }
+                        .buttonStyle(PanelButtonStyle(primary: true))
+                        .keyboardShortcut(.defaultAction)
+                }
             }
         }
     }
@@ -212,12 +220,12 @@ struct SimpleJobRow: View {
                     MiniTickBar(value: job.progress, paused: paused || stopping, height: 9)
                         .padding(.top, 2)
                     Text(speedLine)
-                        .font(.caption.monospacedDigit())
+                        .font(.subheadline.monospacedDigit())
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .contentTransition(.numericText())
                 } else {
-                    Text(subtitle).font(.caption).foregroundStyle(job.state == .failed ? .red : .secondary).lineLimit(1)
+                    Text(subtitle).font(.subheadline).foregroundStyle(job.state == .failed ? .red : .secondary).lineLimit(1)
                 }
             }
             Spacer(minLength: 6)
@@ -227,7 +235,7 @@ struct SimpleJobRow: View {
         .padding(.vertical, 8)
         .background(RoundedRectangle(cornerRadius: Radius.row).fill(Color.primary.opacity(hovering ? 0.07 : 0.04)))
         .onHover { hovering = $0 }
-        .help(job.error ?? job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" }.joined(separator: "\n"))
+        .help(job.error ?? (job.outputs.isEmpty ? "" : (job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" } + ["MP4 plays everywhere. WebM is smaller for Chrome, Firefox, and Edge. Use both on a website, or just the MP4 elsewhere. Double-click to show in Finder."]).joined(separator: "\n")))
         .onTapGesture(count: 2) { if !job.outputs.isEmpty { Finder.reveal(job.outputs.map(\.url)) } }
     }
 
@@ -245,10 +253,10 @@ struct SimpleJobRow: View {
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(Capsule().fill(Brand.green.opacity(0.15)))
                 Button { Finder.reveal(job.outputs.map(\.url)) } label: { Image(systemName: "magnifyingglass") }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Show in Finder")
+                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Show in Finder").accessibilityLabel("Show \(job.url.lastPathComponent) in Finder")
             }
         } else if hovering {
-            Button(action: remove) { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.tertiary)
+            Button(action: remove) { Image(systemName: "xmark.circle.fill") }.buttonStyle(.plain).foregroundStyle(.secondary).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
         }
     }
 
@@ -256,9 +264,9 @@ struct SimpleJobRow: View {
         switch job.state {
         case .done:
             guard let smallest = job.outputs.map(\.bytes).min(), let source = job.outputs.first?.sourceBytes else { return "Done" }
-            return "\(Fmt.bytes(source)) → \(Fmt.bytes(smallest))"
+            return "\(Fmt.bytes(source)) → \(Fmt.bytes(smallest)) · \(job.outputs.map { $0.codec.fileExtension.uppercased() }.reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }.joined(separator: " + "))"
         case .failed: return job.error ?? "Failed"
-        case .cancelled: return "Stopped · will restart"
+        case .cancelled: return "Stopped · starts over when you press Start"
         default:
             return job.probe.map { "\($0.dimensions)\($0.bitDepth > 8 ? " · \($0.bitDepth)-bit" : "") · \(Fmt.duration($0.duration)) · \(Fmt.bytes($0.bytes))" } ?? "Waiting"
         }
@@ -283,6 +291,45 @@ struct SimpleJobRow: View {
         case .running: return Brand.orange
         default: return .secondary
         }
+    }
+}
+
+/// Shown when FFmpeg is missing: what it is, the one command to install it, and a way to re-check.
+struct FFmpegSetupCard: View {
+    let recheck: () -> Void
+    @State private var copied = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label {
+                Text("One-time setup needed")
+            } icon: {
+                Image(systemName: "wrench.and.screwdriver.fill").foregroundStyle(Brand.amber)
+            }
+            .font(.callout.weight(.semibold))
+            Text("Squish uses FFmpeg, a free video tool, to make videos smaller. Open Terminal, paste this command, and press Return:")
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Text("brew install ffmpeg").font(.system(.callout, design: .monospaced)).textSelection(.enabled)
+                Spacer(minLength: 4)
+                Button(copied ? "Copied" : "Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("brew install ffmpeg", forType: .string)
+                    copied = true
+                }
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: Radius.small).fill(Color.primary.opacity(0.06)))
+            HStack {
+                Link("No Homebrew? Get it at brew.sh", destination: URL(string: "https://brew.sh")!).font(.subheadline)
+                Spacer()
+                Button("Check again", action: recheck).controlSize(.small)
+            }
+        }
+        .padding(12)
+        .surfaceCard(cornerRadius: Radius.row, tint: Brand.amber)
     }
 }
 
@@ -316,7 +363,7 @@ struct OutputFolderRow: View {
                         .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

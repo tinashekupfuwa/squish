@@ -24,9 +24,9 @@ struct CompressView: View {
                 if model.jobs.isEmpty {
                     Spacer()
                     VStack(spacing: 8) {
-                        Image(systemName: "tray").font(.system(size: 30)).foregroundStyle(.tertiary)
-                        Text("The queue is empty").font(.headline).foregroundStyle(.secondary)
-                        Text("Each video becomes a VP9 WebM and an H.265 MP4 by default, checked with FFprobe and a full decode.")
+                        Image(systemName: "tray").font(.system(size: 30)).foregroundStyle(.secondary)
+                        Text("No videos yet").font(.headline).foregroundStyle(.secondary)
+                        Text("Each video becomes a WebM and an MP4 that together play in every modern browser. Squish checks every file it makes, and your originals are never changed.")
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
                     }
                     .transition(.opacity)
@@ -125,8 +125,8 @@ struct JobRow: View {
                 Spacer()
                 Text(paused ? "Paused" : job.status).font(.caption).foregroundStyle(.secondary).contentTransition(.opacity)
                 if job.state != .running {
-                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill").foregroundStyle(.tertiary) }
-                        .buttonStyle(.borderless).help("Remove from queue")
+                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                        .buttonStyle(.borderless).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
                 }
             }
             if job.state == .running {

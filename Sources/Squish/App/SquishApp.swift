@@ -66,10 +66,10 @@ enum AppSection: String, CaseIterable, Identifiable, Hashable {
     }
     var subtitle: String {
         switch self {
-        case .compress: return "Optimize video files"
-        case .compare: return "CRF vs. size table"
-        case .audit: return "Folder or URL report"
-        case .optimize: return "Fix a whole project"
+        case .compress: return "Make videos smaller"
+        case .compare: return "Test settings on short clips before compressing"
+        case .audit: return "Check a website's videos for wasted size"
+        case .optimize: return "Shrink every video in a website project"
         }
     }
     var symbol: String {
@@ -232,7 +232,7 @@ struct Sidebar: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(title)
                 .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.bottom, 4)
             ForEach(sections) { row($0) }
@@ -275,7 +275,7 @@ struct MissingToolsBanner: View {
     var body: some View {
         HStack {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            Text("FFmpeg is required. Install it with `brew install ffmpeg`, or set its path in Settings.").font(.callout)
+            Text("Squish needs FFmpeg, a free video tool. Install it with `brew install ffmpeg` in Terminal, or set its location in Settings.").font(.callout)
             Spacer()
             Button("Check again", action: recheck)
         }

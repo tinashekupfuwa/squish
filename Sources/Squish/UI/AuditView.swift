@@ -11,8 +11,9 @@ struct SiteInputsSection: View {
             FolderField(label: "Originals", url: $options.originals, optional: true)
         }
         Section("Measurement") {
-            Stepper(value: $options.density, in: 1...3, step: 0.5) { Text("Density: \(String(format: "%g", options.density))× per CSS px") }
-            if showPages { Stepper(value: $options.maxPages, in: 1...50) { Text("Pages to crawl: \(options.maxPages)") } }
+            Stepper(value: $options.density, in: 1...3, step: 0.5) { Text("Screen sharpness: \(String(format: "%g", options.density))×") }
+                .help("Pixel density to plan for. 2× matches Retina screens.")
+            if showPages { Stepper(value: $options.maxPages, in: 1...50) { Text("Pages to check: \(options.maxPages)") } }
             ForEach(Viewport.defaults) { viewport in
                 Toggle("\(viewport.name) \(viewport.width)×\(viewport.height)", isOn: Binding(
                     get: { options.viewports.contains(viewport) },
@@ -22,7 +23,8 @@ struct SiteInputsSection: View {
                     }))
             }
             OptionalIntField(label: "Fallback display width (CSS px)", value: $options.manualDisplayWidth, prompt: "None")
-            Toggle("Analyze audio for silence", isOn: $options.analyzeAudio)
+            Toggle("Find silent audio tracks", isOn: $options.analyzeAudio)
+                .help("Silent audio still adds to the file size and can be removed.")
         }
     }
 }

@@ -15,8 +15,12 @@ enum Brand {
     static let darkPurple = Color(red: 0.36, green: 0.13, blue: 0.70)
     static let amber = Color(red: 0.96, green: 0.68, blue: 0.16)
     static let orange = Color(red: 0.98, green: 0.55, blue: 0.18)
-    /// #757575, the neutral used for in-progress status text.
-    static let statusGrey = Color(red: 0x75 / 255, green: 0x75 / 255, blue: 0x75 / 255)
+    /// Neutral in-progress status text: #666666 on light (4.6:1 on cards), #A3A3A3 on dark (4.9:1).
+    static let statusGrey = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            ? NSColor(srgbRed: 0xA3 / 255, green: 0xA3 / 255, blue: 0xA3 / 255, alpha: 1)
+            : NSColor(srgbRed: 0x66 / 255, green: 0x66 / 255, blue: 0x66 / 255, alpha: 1)
+    })
     static let green = Color(red: 0.20, green: 0.74, blue: 0.42)
 
     /// Linear blend between two colors in sRGB, t in 0...1.
@@ -62,13 +66,14 @@ struct TickBar: View {
     var tickWidth: CGFloat = 6
     var spacing: CGFloat = 3.5
     var height: CGFloat = 22
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             let count = max(8, Int((geo.size.width + spacing) / (tickWidth + spacing)))
             let filled = Int((min(max(value, 0), 1) * Double(count)).rounded(.down))
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: !running || paused)) { timeline in
-                let pulse = (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: !running || paused || reduceMotion)) { timeline in
+                let pulse = reduceMotion ? 0.6 : (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
                 HStack(spacing: 0) {
                     ForEach(0..<count, id: \.self) { i in
                         Capsule()
@@ -104,14 +109,15 @@ struct SegmentedProgressBar: View {
     var done = false
     var tint: Color = Brand.green
     var height: CGFloat = 14
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geo in
             let count = max(segments.count, 1)
             let spacing = min(5, geo.size.width / CGFloat(count) * 0.25)
             let width = (geo.size.width - spacing * CGFloat(count - 1)) / CGFloat(count)
-            TimelineView(.animation(minimumInterval: 1 / 30, paused: active == nil || paused)) { timeline in
-                let pulse = (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: active == nil || paused || reduceMotion)) { timeline in
+                let pulse = reduceMotion ? 0.6 : (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
                 HStack(spacing: spacing) {
                     ForEach(0..<count, id: \.self) { i in
                         segment(i, width: width, pulse: pulse)
@@ -359,8 +365,8 @@ struct QualityRuler: View {
                         ForEach([0, 25, 50, 75, 100], id: \.self) { mark in
                             let near = abs(compression - mark) <= 4
                             Text("\(mark)")
-                                .font(.system(size: 9, weight: near ? .bold : .medium, design: .monospaced))
-                                .foregroundStyle(near ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                                .font(.system(size: 10, weight: near ? .bold : .medium, design: .monospaced))
+                                .foregroundStyle(near ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
                                 .fixedSize()
                                 .position(x: width * CGFloat(mark) / 100, y: 50)
                         }
@@ -380,8 +386,10 @@ struct QualityRuler: View {
                         .frame(height: 40)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(quality == 50 ? .tertiary : .secondary)
+                .foregroundStyle(.secondary)
+                .opacity(quality == 50 ? 0.5 : 1)
                 .help("Reset to Balanced")
+                .accessibilityLabel("Reset to Balanced")
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 6)

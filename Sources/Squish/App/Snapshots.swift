@@ -20,6 +20,7 @@ enum Snapshots {
             ("simple-stopping", AnyView(SimpleView(model: stopping.compress).environment(stopping)), AppSize.simple),
             ("menubar", AnyView(MenuBarPanel().environment(busy)), NSSize(width: 320, height: 470)),
             ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: AppSize.advanced.width - 200, height: AppSize.advanced.height - 52)),
+            ("ffmpeg-setup", AnyView(FFmpegSetupCard {}.padding(16)), NSSize(width: AppSize.simple.width, height: 200)),
             ("advanced-sidebar", AnyView(Sidebar(section: .constant(.compress)).padding(.top, 40).environment(busy)), NSSize(width: 200, height: AppSize.advanced.height)),
         ]
         for (base, view, size) in shots {
@@ -46,6 +47,7 @@ enum Snapshots {
         let done = CompressJob(url: URL(fileURLWithPath: "/Movies/hero-loop.mov"))
         done.probe = probe("hero", 1920, 1080, 48_200_000)
         done.state = .done
+        done.status = "Done"
         done.progress = 1
         let verification = Verification(probe: probe("out", 1920, 1080, 6_100_000), checks: [], issues: [])
         done.outputs = [

@@ -74,6 +74,8 @@ struct CompareView: View {
                         Spacer()
                         Button { model.options.candidates.removeAll { $0.id == candidate.id } } label: { Image(systemName: "minus.circle") }
                             .buttonStyle(.borderless)
+                            .help("Remove this setting")
+                            .accessibilityLabel("Remove this setting")
                     }
                 }
                 HStack {
@@ -86,7 +88,7 @@ struct CompareView: View {
                 }
                 .buttonStyle(.link)
             } header: {
-                Text("Candidates (\(model.options.candidates.count) of 2–8)")
+                Text("Settings to test (\(model.options.candidates.count) of 2–8)")
             }
             Section("Samples") {
                 TextField("Positions (% of duration)", text: $positions)
@@ -94,20 +96,22 @@ struct CompareView: View {
                     Text("Length: \(String(format: "%g", model.options.sampleDuration)) s each")
                 }
             }
-            Section("Transform") {
+            Section("Adjustments") {
                 OptionalIntField(label: "Max width (px)", value: $model.options.maxWidth)
-                Picker("Above 30 fps", selection: $model.options.frameRate) {
+                Picker("Frame rate", selection: $model.options.frameRate) {
                     ForEach(FrameRateMode.allCases) { Text($0.label).tag($0) }
                 }
                 Toggle("Smooth gradients", isOn: $model.options.tenBit)
                     .help("Encode the test clips with 10-bit color, as Compress does by default.")
-                Picker("Encoder speed", selection: $model.options.speed) {
+                Picker("Encoding speed", selection: $model.options.speed) {
                     ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
                 }
             }
             Section("Report") {
                 Toggle("Measure PSNR too", isOn: $model.options.psnr)
-                Toggle("Show SSIM / PSNR columns", isOn: $model.showMetrics)
+                    .help("PSNR is a second quality score. It takes longer to measure.")
+                Toggle("Show quality scores", isOn: $model.showMetrics)
+                    .help("SSIM: 1.0 means identical to the original; above 0.98 looks the same to most people. PSNR: higher is better.")
             }
             DestinationSection()
         }
@@ -136,7 +140,7 @@ struct CompareView: View {
             Grid(alignment: .leading, horizontalSpacing: 20, verticalSpacing: 8) {
                 GridRow {
                     Text("Format"); Text("CRF").gridColumnAlignment(.trailing); Text("Estimated size").gridColumnAlignment(.trailing); Text("File")
-                    if model.showMetrics { Text("SSIM").gridColumnAlignment(.trailing); Text("PSNR").gridColumnAlignment(.trailing); Text("Pareto") }
+                    if model.showMetrics { Text("SSIM").gridColumnAlignment(.trailing); Text("PSNR").gridColumnAlignment(.trailing); Text("Best value").help("Not beaten by any other setting on both size and quality") }
                 }
                 .font(.caption.bold()).foregroundStyle(.secondary)
                 Divider()

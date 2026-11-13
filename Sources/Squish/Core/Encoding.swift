@@ -11,6 +11,14 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
         case .av1: return "AV1 / WebM"
         }
     }
+    /// Who plays this format, in plain words.
+    var audience: String {
+        switch self {
+        case .vp9: return "Chrome, Firefox, Edge"
+        case .h265: return "Safari, iPhone, Mac"
+        case .av1: return "Smallest; slow to make"
+        }
+    }
     var shortLabel: String {
         switch self {
         case .vp9: return "VP9"
@@ -57,8 +65,8 @@ enum AudioMode: String, CaseIterable, Identifiable, Codable, Sendable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .auto: return "Auto (drop if silent)"
-        case .keep: return "Keep first track"
+        case .auto: return "Auto (remove if silent)"
+        case .keep: return "Keep"
         case .remove: return "Remove"
         }
     }
@@ -67,13 +75,13 @@ enum AudioMode: String, CaseIterable, Identifiable, Codable, Sendable {
 enum FrameRateMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case preserve, cap
     var id: String { rawValue }
-    var label: String { self == .preserve ? "Same as source" : "Cap at ~30 fps (smaller files)" }
+    var label: String { self == .preserve ? "Same as source" : "Limit to 30 fps (smaller files)" }
 }
 
 enum SpeedMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case skill, faster
     var id: String { rawValue }
-    var label: String { self == .skill ? "Best (skill defaults, slowest)" : "Faster (slightly larger files)" }
+    var label: String { self == .skill ? "Best quality (slower)" : "Faster (slightly larger files)" }
 }
 
 struct EncodeSettings: Codable, Equatable, Sendable {

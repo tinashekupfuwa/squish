@@ -119,29 +119,39 @@ struct CodecSettingsSection: View {
             Picker("Audio", selection: $settings.audio) {
                 ForEach(AudioMode.allCases) { Text($0.label).tag($0) }
             }
-            Picker("Above 30 fps", selection: $settings.frameRate) {
+            Picker("Frame rate", selection: $settings.frameRate) {
                 ForEach(FrameRateMode.allCases) { Text($0.label).tag($0) }
             }
-            if showResize { OptionalIntField(label: "Max width (px)", value: $settings.maxWidth) }
+            .help("Frames per second. Only videos above 30 fps are affected; limiting them to 30 makes files smaller and still looks smooth.")
+            if showResize {
+                OptionalIntField(label: "Max width (px)", value: $settings.maxWidth)
+                    .help("Shrink videos wider than this. Leave empty to keep the original size.")
+            }
             Toggle(isOn: $settings.tenBit) {
                 Text("Smooth gradients")
-                Text(settings.tenBit ? "Keeps skies and shadows free of banding" : "Plays on very old devices; gradients may show banding")
+                Text(settings.tenBit ? "Keeps skies and shadows smooth" : "Works on very old devices; may show banding")
             }
             .help("Saves video with 10-bit color, the most web players support. Turn off only if the video must play on devices from before about 2016.")
-            Picker("Encoder speed", selection: $settings.speed) {
+            Picker("Encoding speed", selection: $settings.speed) {
                 ForEach(SpeedMode.allCases) { Text($0.label).tag($0) }
             }
         }
     }
 
     private func codecRow(_ codec: Codec, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Toggle(codec.label, isOn: isOn)
-            Spacer()
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(codec.label)
+                Text(codec.audience).font(.caption).foregroundStyle(.secondary)
+            }
+            .frame(width: 140, alignment: .leading)
+            Spacer(minLength: 4)
             Stepper(value: Binding(get: { settings.crf(for: codec) }, set: { settings.crf[codec] = $0 }), in: codec.crfRange) {
                 Text("CRF \(settings.crf(for: codec))").monospacedDigit().foregroundStyle(isOn.wrappedValue ? .primary : .secondary)
             }
             .disabled(!isOn.wrappedValue)
+            .help("Quality number (CRF). Lower means better quality and bigger files.")
+            Toggle(codec.label, isOn: isOn).labelsHidden()
         }
     }
 }
