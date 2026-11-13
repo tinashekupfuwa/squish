@@ -370,7 +370,7 @@ struct QualityRuler: View {
              : Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.55 + compression / 250)
     }
 
-    private let numberWidth: CGFloat = 46
+    private let numberWidth: CGFloat = 72
     private let resetWidth: CGFloat = 18
     private let trackGap: CGFloat = 8
     /// Keeps 0 and 100 inside the track, on the first and last ticks.
@@ -400,7 +400,6 @@ struct QualityRuler: View {
                         .monospacedDigit()
                         .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.7)
                         .frame(width: numberWidth, height: 40, alignment: .leading)
                         .contentTransition(.numericText(value: Double(compression)))
                     GeometryReader { geo in
