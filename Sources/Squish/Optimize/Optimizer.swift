@@ -2,7 +2,7 @@ import Foundation
 
 struct OptimizeOptions: Sendable {
     var audit: AuditOptions = { var o = AuditOptions(); o.maxPages = 10; return o }()
-    var encode = EncodeSettings()
+    var encode: EncodeSettings = { var s = EncodeSettings(); s.vp9 = true; s.speed = .skill; return s }()
     var threshold: Double = 0.05
     var removeAudioWhenMutedWithoutControls = false
 }

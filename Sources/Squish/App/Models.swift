@@ -58,6 +58,16 @@ final class CompressModel {
             UserDefaults.standard.set(true, forKey: "tenBitDefaultApplied")
         }
         if UserDefaults.standard.object(forKey: "lastQuality") != nil { quality = UserDefaults.standard.integer(forKey: "lastQuality") }
+        if !UserDefaults.standard.bool(forKey: "h265DefaultsApplied") {
+            settings.vp9 = false
+            settings.h265 = true
+            settings.av1 = false
+            settings.speed = .faster
+            settings.tenBit = true
+            quality = 50
+            Persistence.save(settings, key: "lastSettings")
+            UserDefaults.standard.set(true, forKey: "h265DefaultsApplied")
+        }
         userPresets = Persistence.load([EncodePreset].self, key: "userPresets") ?? []
     }
 

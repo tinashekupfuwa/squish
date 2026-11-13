@@ -99,11 +99,11 @@ enum FrameRateMode: String, CaseIterable, Identifiable, Codable, Sendable {
 enum SpeedMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case skill, faster
     var id: String { rawValue }
-    var label: String { self == .skill ? "Best quality (slower)" : "Faster (slightly larger files)" }
+    var label: String { self == .skill ? "Extra compression (much slower)" : "Standard" }
 }
 
 struct EncodeSettings: Codable, Equatable, Sendable {
-    var vp9 = true
+    var vp9 = false
     var h265 = true
     var av1 = false
     var crf: [Codec: Int] = [.vp9: 42, .h265: 30, .av1: 42]
@@ -111,7 +111,7 @@ struct EncodeSettings: Codable, Equatable, Sendable {
     var frameRate: FrameRateMode = .preserve
     var tenBit = true
     var maxWidth: Int? = nil
-    var speed: SpeedMode = .skill
+    var speed: SpeedMode = .faster
 
     var enabledCodecs: [Codec] {
         Codec.allCases.filter { codec in
