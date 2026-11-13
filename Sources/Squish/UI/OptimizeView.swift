@@ -48,10 +48,10 @@ struct OptimizeView: View {
                             Spacer()
                             Text("\(Int((model.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
                         }
-                        GlowProgressBar(value: model.progress, paused: model.isPaused)
+                        MiniTickBar(value: model.progress, paused: model.isPaused)
                     }
                     .padding(12)
-                    .glassCard()
+                    .surfaceCard()
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 }
                 if !model.log.isEmpty, model.isRunning || (model.plan == nil && model.result == nil) { LogView(lines: model.log) }
@@ -59,7 +59,7 @@ struct OptimizeView: View {
                     Spacer()
                     if let plan = model.plan, model.result == nil, plan.hasWork, !model.isRunning {
                         Button("Apply \(plan.changes.count + plan.edits.count) changes") { model.apply() }
-                            .glassButton(prominent: true)
+                            .controlButton(prominent: true)
                             .transition(.scale.combined(with: .opacity))
                     }
                     TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
@@ -121,7 +121,7 @@ struct PlanView: View {
                         ForEach(video.notes, id: \.self) { Label($0, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
                     }
                     .padding(12)
-                    .glassCard(cornerRadius: 14)
+                    .surfaceCard(cornerRadius: 14)
                 }
                 if !plan.edits.isEmpty {
                     Text("Source edits").font(.headline)
@@ -136,7 +136,7 @@ struct PlanView: View {
                             }
                         }
                         .padding(8)
-                        .glassCard(cornerRadius: 10)
+                        .surfaceCard(cornerRadius: 10)
                         .textSelection(.enabled)
                     }
                 }

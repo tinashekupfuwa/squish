@@ -10,8 +10,7 @@ struct SquishApp: App {
         WindowGroup("Squish", id: "main") {
             RootView()
                 .environment(state)
-                .modifier(WindowGlass())
-                .preferredColorScheme(.dark)
+                .tint(Brand.indigo)
         }
         .windowResizability(.contentSize)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -29,13 +28,13 @@ struct SquishApp: App {
         MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuBarPanel()
                 .environment(state)
-                .preferredColorScheme(.dark)
+                .tint(Brand.indigo)
         } label: {
             MenuBarLabel(model: state.compress)
         }
         .menuBarExtraStyle(.window)
 
-        Settings { SettingsView().preferredColorScheme(.dark) }
+        Settings { SettingsView() }
     }
 }
 
@@ -114,10 +113,10 @@ struct RootView: View {
         Group {
             if mode == "advanced" {
                 ContentView()
-                    .frame(minWidth: 820, idealWidth: 920, maxWidth: .infinity, minHeight: 480, idealHeight: 560, maxHeight: .infinity)
+                    .frame(width: AppSize.advanced.width, height: AppSize.advanced.height)
             } else {
                 SimpleView(model: state.compress)
-                    .frame(width: 380, height: 640)
+                    .frame(width: AppSize.simple.width, height: AppSize.simple.height)
             }
         }
         .overlay {
@@ -129,7 +128,7 @@ struct RootView: View {
                         Label("Drop to add videos", systemImage: "plus.circle.fill")
                             .font(.title3.weight(.semibold))
                             .padding(.horizontal, 18).padding(.vertical, 10)
-                            .glassCard(cornerRadius: 22)
+                            .background(Capsule().fill(.regularMaterial))
                     }
                     .padding(6)
                     .allowsHitTesting(false)
@@ -140,9 +139,14 @@ struct RootView: View {
             return !urls.isEmpty
         } isTargeted: { dropTargeted = $0 }
         .onChange(of: mode) { _, newMode in
-            WindowSizer.resize(to: newMode == "advanced" ? NSSize(width: 920, height: 560) : NSSize(width: 380, height: 640))
+            WindowSizer.resize(to: newMode == "advanced" ? AppSize.advanced : AppSize.simple)
         }
     }
+}
+
+enum AppSize {
+    static let simple = NSSize(width: 380, height: 680)
+    static let advanced = NSSize(width: 940, height: 600)
 }
 
 enum WindowSizer {
@@ -177,7 +181,7 @@ struct ContentView: View {
 
     var body: some View {
         @Bindable var state = state
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: .constant(.all)) {
             List(selection: $state.section) {
                 ForEach(AppSection.allCases) { section in
                     Label {
@@ -193,8 +197,13 @@ struct ContentView: View {
                 }
             }
             .listStyle(.sidebar)
-            .scrollContentBackground(.hidden)
-            .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 240)
+            .toolbar(removing: .sidebarToggle)
+            .safeAreaInset(edge: .bottom) {
+                ModeSwitch(width: 176)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 12)
+            }
+            .navigationSplitViewColumnWidth(200)
         } detail: {
             VStack(spacing: 0) {
                 if !toolsFound {
@@ -209,9 +218,7 @@ struct ContentView: View {
             }
             .transaction { $0.animation = nil }
             .navigationTitle((state.section ?? .compress).title)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) { ModeSwitch() }
-            }
+            .toolbar(.visible, for: .windowToolbar)
         }
     }
 }
@@ -227,19 +234,6 @@ struct MissingToolsBanner: View {
         }
         .padding(10)
         .background(.orange.opacity(0.12))
-    }
-}
-
-/// Translucent window background so the desktop glows through behind the glass.
-struct WindowGlass: ViewModifier {
-    func body(content: Content) -> some View {
-        if #available(macOS 15, *) {
-            content
-                .containerBackground(.ultraThinMaterial, for: .window)
-                .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
-        } else {
-            content.background(.ultraThinMaterial)
-        }
     }
 }
 

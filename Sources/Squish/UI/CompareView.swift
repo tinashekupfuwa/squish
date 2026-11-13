@@ -27,10 +27,10 @@ struct CompareView: View {
                                 Spacer()
                                 Text("\(Int((model.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
                             }
-                            GlowProgressBar(value: model.progress, paused: model.isPaused)
+                            MiniTickBar(value: model.progress, paused: model.isPaused)
                         }
                         .padding(12)
-                        .glassCard()
+                        .surfaceCard()
                         .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                     if let error = model.error { ErrorText(text: error) }
@@ -189,7 +189,7 @@ struct CompareView: View {
             }
         }
         .padding(14)
-        .glassCard(cornerRadius: 16)
+        .surfaceCard(cornerRadius: 16)
         .transition(.opacity.combined(with: .scale(scale: 0.97, anchor: .top)))
     }
 
@@ -201,7 +201,7 @@ struct CompareView: View {
             Text(title).font(.caption)
         }
         .padding(6)
-        .glassCard(cornerRadius: 10)
+        .surfaceCard(cornerRadius: 10)
         .onTapGesture { Finder.open(url) }
         .help("Open preview")
     }

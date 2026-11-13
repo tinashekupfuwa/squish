@@ -28,8 +28,7 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            TickBar(value: model.isRunning || model.overallProgress > 0 ? model.overallProgress : 0,
-                    count: 34, paused: model.isPaused, running: model.isRunning, tint: model.doneJobs.isEmpty || model.isRunning ? .orange : .green, height: 20)
+            TickBar(value: finished ? 1 : model.overallProgress, paused: model.isPaused, running: model.isRunning, done: finished, height: 20)
         }
     }
 
@@ -48,7 +47,7 @@ struct QueueStatus: View {
         if model.jobs.isEmpty { return "Ready" }
         return "\(model.pending.count) waiting"
     }
-    private var headlineColor: Color { model.isPaused ? .yellow : model.isRunning ? .orange : finished ? .green : .primary }
+    private var headlineColor: Color { model.isPaused ? Brand.amber : model.isRunning ? Brand.indigo : finished ? Brand.green : .primary }
 
     private var detail: String {
         if let job = model.currentJob { return "\(job.url.lastPathComponent) · \(model.doneJobs.count + 1) of \(model.jobs.count)" }
@@ -60,8 +59,6 @@ struct QueueStatus: View {
 
 struct SimpleView: View {
     @Bindable var model: CompressModel
-    @AppStorage("outputMode") private var outputMode = "source"
-    @AppStorage("outputFolder") private var outputFolder = ""
     @State private var toolsFound = Tools.locate("ffmpeg") != nil
 
     var body: some View {
@@ -85,26 +82,14 @@ struct SimpleView: View {
             queue
 
             VStack(alignment: .leading, spacing: 8) {
-                CapsLabel("Quality")
-                QualityRuler(value: $model.quality)
+                CapsLabel("Compression")
+                QualityRuler(quality: $model.quality)
             }
             .disabled(model.isRunning)
 
             controls
 
-            HStack(spacing: 6) {
-                Image(systemName: "folder").foregroundStyle(.secondary)
-                Text(destinationText).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
-                Spacer()
-                Menu {
-                    Button("Next to each original") { outputMode = "source" }
-                    Button("Choose folder…") {
-                        if let url = Panels.chooseFolder() { outputFolder = url.path; outputMode = "custom" }
-                    }
-                } label: { Text("Change").font(.caption) }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
+            OutputFolderRow()
         }
         .padding(.horizontal, 16)
         .padding(.bottom, 14)
@@ -112,10 +97,6 @@ struct SimpleView: View {
         .toolbar(.hidden, for: .windowToolbar)
         .ignoresSafeArea(.container, edges: .top)
         .padding(.top, 10)
-    }
-
-    private var destinationText: String {
-        outputMode == "custom" && !outputFolder.isEmpty ? "Saving to " + (outputFolder as NSString).abbreviatingWithTildeInPath : "Saving next to each original"
     }
 
     @ViewBuilder
@@ -130,7 +111,7 @@ struct SimpleView: View {
                     Text("or click to choose").font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.15), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
+                .background(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.primary.opacity(0.22), style: StrokeStyle(lineWidth: 1.5, dash: [6, 5])))
                 .contentShape(RoundedRectangle(cornerRadius: 18))
             }
             .buttonStyle(.plain)
@@ -201,7 +182,8 @@ struct SimpleJobRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(job.url.lastPathComponent).font(.callout.weight(.medium)).lineLimit(1).truncationMode(.middle)
                 if job.state == .running {
-                    GlowProgressBar(value: job.progress, paused: paused, height: 4)
+                    MiniTickBar(value: job.progress, paused: paused, height: 9)
+                        .padding(.top, 2)
                 } else {
                     Text(subtitle).font(.caption).foregroundStyle(job.state == .failed ? .red : .secondary).lineLimit(1)
                 }
@@ -211,7 +193,7 @@ struct SimpleJobRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(hovering ? 0.08 : 0.04)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.primary.opacity(hovering ? 0.07 : 0.04)))
         .onHover { hovering = $0 }
         .help(job.error ?? job.outputs.map { "\($0.url.lastPathComponent): \(Fmt.bytes($0.bytes))" }.joined(separator: "\n"))
         .onTapGesture(count: 2) { if !job.outputs.isEmpty { Finder.reveal(job.outputs.map(\.url)) } }
@@ -225,9 +207,9 @@ struct SimpleJobRow: View {
             HStack(spacing: 6) {
                 Text("−\(Int(((1 - Double(smallest) / Double(source)) * 100).rounded()))%")
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Brand.green)
                     .padding(.horizontal, 7).padding(.vertical, 3)
-                    .background(Capsule().fill(Color.green.opacity(0.15)))
+                    .background(Capsule().fill(Brand.green.opacity(0.15)))
                 Button { Finder.reveal(job.outputs.map(\.url)) } label: { Image(systemName: "magnifyingglass") }
                     .buttonStyle(.plain).foregroundStyle(.secondary).help("Show in Finder")
             }
@@ -260,12 +242,56 @@ struct SimpleJobRow: View {
     }
 
     private var color: Color {
-        if paused { return .yellow }
+        if paused { return Brand.amber }
         switch job.state {
-        case .done: return .green
+        case .done: return Brand.green
         case .failed: return .red
-        case .running: return .orange
+        case .running: return Brand.indigo
         default: return .secondary
         }
+    }
+}
+
+/// Folder icon labelled "Output folder"; shows where files go and opens a menu to change it.
+struct OutputFolderRow: View {
+    @AppStorage("outputMode") private var outputMode = "source"
+    @AppStorage("outputFolder") private var outputFolder = ""
+
+    private var custom: Bool { outputMode == "custom" && !outputFolder.isEmpty }
+
+    var body: some View {
+        Menu {
+            Button { outputMode = "source" } label: {
+                if outputMode == "source" { Label("Same folder as each original", systemImage: "checkmark") } else { Text("Same folder as each original") }
+            }
+            Button("Choose a folder…") {
+                if let url = Panels.chooseFolder() { outputFolder = url.path; outputMode = "custom" }
+            }
+            if custom {
+                Divider()
+                Button("Show in Finder") { Finder.open(URL(fileURLWithPath: outputFolder)) }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "folder.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(Brand.indigo)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Output folder").font(.callout.weight(.medium)).foregroundStyle(.primary)
+                    Text(custom ? (outputFolder as NSString).abbreviatingWithTildeInPath : "Same folder as each original")
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.up.chevron.down").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .surfaceCard(cornerRadius: 12)
+        .help("Choose where compressed videos are saved")
     }
 }

@@ -60,14 +60,14 @@ struct CompressView: View {
                             .contentTransition(.numericText())
                     }
                 }
-                GlowProgressBar(value: model.overallProgress, paused: model.isPaused, height: 8)
+                MiniTickBar(value: model.overallProgress, paused: model.isPaused, height: 8)
             }
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })
                 Button("Clear all", role: .destructive) { withAnimation(.spring) { model.jobs.removeAll { $0.state != .running } } }.disabled(model.jobs.isEmpty)
             } label: { Image(systemName: "ellipsis") }
             .menuStyle(.button)
-            .glassButton()
+            .controlButton()
             .fixedSize()
             TransportControls(isRunning: model.isRunning, isPaused: model.isPaused,
                               canStart: !model.pending.isEmpty && !model.settings.enabledCodecs.isEmpty,
@@ -78,7 +78,7 @@ struct CompressView: View {
                               stop: model.stop)
         }
         .padding(12)
-        .glassCard(cornerRadius: 18)
+        .surfaceCard(cornerRadius: 18)
         .animation(.easeInOut(duration: 0.25), value: model.overallProgress)
     }
 
@@ -120,7 +120,7 @@ struct JobRow: View {
             }
             if job.state == .running {
                 HStack(spacing: 10) {
-                    GlowProgressBar(value: job.progress, paused: paused)
+                    MiniTickBar(value: job.progress, paused: paused)
                     Text("\(Int((job.progress * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36, alignment: .trailing)
                         .contentTransition(.numericText())
                 }
@@ -133,11 +133,11 @@ struct JobRow: View {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
                     ForEach(job.outputs) { output in
                         GridRow {
-                            Text(output.codec.label).fontWeight(.medium)
+                            Text(output.codec.shortLabel).fontWeight(.medium).fixedSize()
                             Text(output.url.lastPathComponent).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
-                            Text("\(Fmt.bytes(output.sourceBytes)) → \(Fmt.bytes(output.bytes))").monospacedDigit()
-                            Text(Fmt.savings(from: output.sourceBytes, to: output.bytes))
-                                .foregroundStyle(output.bytes < output.sourceBytes ? .green : .orange).monospacedDigit()
+                            Text("\(Fmt.bytes(output.sourceBytes)) → \(Fmt.bytes(output.bytes))").monospacedDigit().fixedSize()
+                            Text(output.sourceBytes > 0 ? String(format: "%+.0f%%", (Double(output.bytes) / Double(output.sourceBytes) - 1) * 100) : "–")
+                                .foregroundStyle(output.bytes < output.sourceBytes ? Brand.green : Brand.amber).monospacedDigit().fixedSize()
                             Image(systemName: output.verification.passed ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
                                 .foregroundStyle(output.verification.passed ? .green : .orange)
                                 .help((output.verification.checks + output.verification.issues).joined(separator: "\n"))
@@ -165,7 +165,7 @@ struct JobRow: View {
             }
         }
         .padding(12)
-        .glassCard(cornerRadius: 14, tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
+        .surfaceCard(cornerRadius: 14, tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.state)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.outputs.count)
     }

@@ -48,12 +48,12 @@ struct DropZone: View {
                 Text(subtitle).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Choose…", action: onChoose).glassButton()
+            Button("Choose…", action: onChoose).controlButton()
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
         .frame(maxWidth: .infinity)
-        .glassCard(cornerRadius: 16, tint: targeted ? .accentColor : nil)
+        .surfaceCard(cornerRadius: 16, tint: targeted ? .accentColor : nil)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6]))
@@ -157,7 +157,7 @@ struct LogView: View {
                 .padding(8)
             }
             .frame(minHeight: 70, maxHeight: 140)
-            .glassCard(cornerRadius: 10)
+            .surfaceCard(cornerRadius: 10)
             .onChange(of: lines.count) { _, count in proxy.scrollTo(count - 1, anchor: .bottom) }
         }
     }

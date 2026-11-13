@@ -9,22 +9,27 @@ enum Snapshots {
         let empty = AppState()
         let busy = AppState()
         fill(busy.compress)
+        busy.compress.quality = 35
         let shots: [(String, AnyView, NSSize)] = [
-            ("simple-empty", AnyView(SimpleView(model: empty.compress).environment(empty)), NSSize(width: 380, height: 640)),
-            ("simple-running", AnyView(SimpleView(model: busy.compress).environment(busy)), NSSize(width: 380, height: 640)),
+            ("simple-empty", AnyView(SimpleView(model: empty.compress).environment(empty)), AppSize.simple),
+            ("simple-running", AnyView(SimpleView(model: busy.compress).environment(busy)), AppSize.simple),
             ("menubar", AnyView(MenuBarPanel().environment(busy)), NSSize(width: 320, height: 470)),
-            ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: 720, height: 560)),
+            ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: AppSize.advanced.width - 200, height: AppSize.advanced.height - 52)),
         ]
-        for (name, view, size) in shots {
-            let host = NSHostingView(rootView: view.preferredColorScheme(.dark).frame(width: size.width, height: size.height).background(Color(white: 0.11)))
+        for (base, view, size) in shots {
+          for dark in [false, true] {
+            let name = base + (dark ? "-dark" : "-light")
+            let host = NSHostingView(rootView: view.tint(Brand.indigo).environment(\.colorScheme, dark ? .dark : .light).frame(width: size.width, height: size.height).background(Color(nsColor: .windowBackgroundColor)))
             let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
-            window.appearance = NSAppearance(named: .darkAqua)
+            window.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+            host.appearance = window.appearance
             window.contentView = host
             host.layoutSubtreeIfNeeded()
             RunLoop.main.run(until: Date().addingTimeInterval(0.4))
             guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { continue }
             host.cacheDisplay(in: host.bounds, to: rep)
             try rep.representation(using: .png, properties: [:])?.write(to: folder.appendingPathComponent("\(name).png"))
+          }
         }
     }
 

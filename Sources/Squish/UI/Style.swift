@@ -1,79 +1,95 @@
+import AppKit
 import SwiftUI
 
+enum Brand {
+    static let teal = Color(red: 0.11, green: 0.71, blue: 0.67)
+    static let indigo = Color(red: 0.38, green: 0.33, blue: 0.90)
+    static let lightPurple = Color(red: 0.78, green: 0.69, blue: 1.00)
+    static let darkPurple = Color(red: 0.36, green: 0.13, blue: 0.70)
+    static let amber = Color(red: 0.96, green: 0.68, blue: 0.16)
+    static let green = Color(red: 0.20, green: 0.74, blue: 0.42)
+
+    /// Linear blend between two colors in sRGB, t in 0...1.
+    static func mix(_ a: Color, _ b: Color, _ t: Double) -> Color {
+        guard let ca = NSColor(a).usingColorSpace(.sRGB), let cb = NSColor(b).usingColorSpace(.sRGB) else { return a }
+        let t = CGFloat(min(max(t, 0), 1))
+        return Color(.sRGB,
+                     red: Double(ca.redComponent + (cb.redComponent - ca.redComponent) * t),
+                     green: Double(ca.greenComponent + (cb.greenComponent - ca.greenComponent) * t),
+                     blue: Double(ca.blueComponent + (cb.blueComponent - ca.blueComponent) * t))
+    }
+}
+
 extension View {
-    /// Liquid Glass on macOS 26 and later, a translucent material before that.
-    @ViewBuilder
-    func glassCard(cornerRadius: CGFloat = 14, tint: Color? = nil) -> some View {
-        if #available(macOS 26, *) {
-            glassEffect(tint.map { Glass.regular.tint($0.opacity(0.18)) } ?? .regular, in: .rect(cornerRadius: cornerRadius))
-        } else {
-            background((tint ?? .clear).opacity(0.08), in: RoundedRectangle(cornerRadius: cornerRadius))
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: cornerRadius))
+    /// A quiet card surface that keeps text contrast in light and dark appearance.
+    func surfaceCard(cornerRadius: CGFloat = 14, tint: Color? = nil) -> some View {
+        background {
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(tint.map { $0.opacity(0.08) } ?? Color.primary.opacity(0.04))
+                .overlay(RoundedRectangle(cornerRadius: cornerRadius).strokeBorder((tint ?? Color.primary).opacity(tint == nil ? 0.08 : 0.25), lineWidth: 0.75))
         }
     }
 
     @ViewBuilder
-    func glassButton(prominent: Bool = false) -> some View {
-        if #available(macOS 26, *) {
-            if prominent { buttonStyle(.glassProminent) } else { buttonStyle(.glass) }
-        } else {
-            if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
-        }
+    func controlButton(prominent: Bool = false) -> some View {
+        if prominent { buttonStyle(.borderedProminent) } else { buttonStyle(.bordered) }
     }
 
-    /// Lets the window's glass show through grouped forms.
-    func clearFormBackground() -> some View {
-        formStyle(.grouped).scrollContentBackground(.hidden)
-    }
+    func clearFormBackground() -> some View { formStyle(.grouped) }
 }
 
 extension AnyTransition {
-    static var card: AnyTransition {
-        .asymmetric(
-            insertion: .scale(scale: 0.94, anchor: .top).combined(with: .opacity).combined(with: .move(edge: .top)),
-            removal: .scale(scale: 0.9).combined(with: .opacity)
-        )
+    static var card: AnyTransition { .opacity }
+}
+
+/// Rounded ticks that fill from the left in the brand gradient. Amber while paused, green when done.
+struct TickBar: View {
+    var value: Double
+    var paused = false
+    var running = false
+    var done = false
+    var tickWidth: CGFloat = 6
+    var spacing: CGFloat = 3.5
+    var height: CGFloat = 22
+
+    var body: some View {
+        GeometryReader { geo in
+            let count = max(8, Int((geo.size.width + spacing) / (tickWidth + spacing)))
+            let filled = Int((min(max(value, 0), 1) * Double(count)).rounded(.down))
+            TimelineView(.animation(minimumInterval: 1 / 30, paused: !running || paused)) { timeline in
+                let pulse = (sin(timeline.date.timeIntervalSinceReferenceDate * 4) + 1) / 2
+                HStack(spacing: 0) {
+                    ForEach(0..<count, id: \.self) { i in
+                        Capsule()
+                            .fill(color(i, count: count, filled: filled, pulse: pulse))
+                            .frame(width: tickWidth, height: height)
+                        if i < count - 1 { Spacer(minLength: 0) }
+                    }
+                }
+            }
+        }
+        .frame(height: height)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue("\(Int((value * 100).rounded())) percent")
+    }
+
+    private func color(_ i: Int, count: Int, filled: Int, pulse: Double) -> Color {
+        let fill: Color = paused ? Brand.amber : done ? Brand.green : Brand.mix(Brand.teal, Brand.indigo, Double(i) / Double(max(count - 1, 1)))
+        if i < filled { return fill }
+        if i == filled && running && !paused { return fill.opacity(0.3 + 0.55 * pulse) }
+        return Color.primary.opacity(0.11)
     }
 }
 
-/// A gradient progress bar with a moving shimmer that freezes and turns amber while paused.
-struct GlowProgressBar: View {
+/// The same meter, smaller and with thinner ticks, for a single converting video.
+struct MiniTickBar: View {
     var value: Double
     var paused = false
     var height: CGFloat = 10
 
     var body: some View {
-        GeometryReader { geo in
-            let clamped = min(max(value, 0), 1)
-            let width = clamped > 0 ? max(height, geo.size.width * clamped) : 0
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.08))
-                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5))
-                TimelineView(.animation(minimumInterval: 1 / 60, paused: paused)) { timeline in
-                    let t = timeline.date.timeIntervalSinceReferenceDate
-                    let phase = CGFloat(t.truncatingRemainder(dividingBy: 1.8) / 1.8)
-                    Capsule()
-                        .fill(LinearGradient(colors: paused ? [.orange, .yellow] : [.cyan, .blue, .purple, .pink],
-                                             startPoint: .leading, endPoint: .trailing))
-                        .overlay {
-                            if !paused {
-                                LinearGradient(colors: [.clear, .white.opacity(0.6), .clear], startPoint: .leading, endPoint: .trailing)
-                                    .frame(width: 70)
-                                    .offset(x: -width / 2 - 35 + phase * (width + 70))
-                            }
-                        }
-                        .overlay(alignment: .top) {
-                            Capsule().fill(.white.opacity(0.35)).frame(height: height * 0.35).padding(.horizontal, height / 2).padding(.top, 1)
-                        }
-                        .clipShape(Capsule())
-                        .frame(width: width)
-                        .shadow(color: (paused ? Color.orange : Color.purple).opacity(0.45), radius: 6)
-                }
-            }
-            .animation(.spring(response: 0.45, dampingFraction: 0.85), value: clamped)
-            .animation(.easeInOut(duration: 0.3), value: paused)
-        }
-        .frame(height: height)
+        TickBar(value: value, paused: paused, running: value < 1, tickWidth: 2.5, spacing: 2.5, height: max(height, 8))
     }
 }
 
@@ -94,27 +110,27 @@ struct TransportControls: View {
                 Button(action: togglePause) {
                     Label(isPaused ? "Resume" : "Pause", systemImage: isPaused ? "play.fill" : "pause.fill")
                         .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
-                        .contentTransition(.symbolEffect(.replace))
+                        .frame(minWidth: compact ? 20 : nil)
                 }
-                .glassButton()
+                .controlButton()
                 .help(isPaused ? "Resume (Space)" : "Pause (Space)")
                 .keyboardShortcut(.space, modifiers: [])
                 Button(role: .destructive, action: stop) {
-                    Label("Stop", systemImage: "stop.fill").labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                    Label("Stop", systemImage: "stop.fill")
+                        .labelStyle(compact ? AnyLabelStyle(.iconOnly) : AnyLabelStyle(.titleAndIcon))
+                        .frame(minWidth: compact ? 20 : nil)
                 }
-                    .glassButton()
-                    .help("Stop (⌘.)")
-                    .keyboardShortcut(".", modifiers: .command)
-                    .transition(.scale.combined(with: .opacity))
+                .controlButton()
+                .help("Stop (⌘.)")
+                .keyboardShortcut(".", modifiers: .command)
             } else {
                 Button(action: start) { Label(startTitle, systemImage: "play.fill") }
-                    .glassButton(prominent: true)
+                    .controlButton(prominent: true)
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canStart)
-                    .transition(.scale.combined(with: .opacity))
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isRunning)
+        .controlSize(.large)
     }
 }
 
@@ -129,14 +145,14 @@ struct DestinationSection: View {
     @AppStorage("outputFolder") private var outputFolder = ""
 
     var body: some View {
-        Section("Destination") {
+        Section("Output folder") {
             Picker("Save to", selection: $outputMode) {
-                Text("Next to each source").tag("source")
-                Text("Custom folder").tag("custom")
+                Text("Same folder as each original").tag("source")
+                Text("A folder I choose").tag("custom")
             }
             if outputMode == "custom" {
                 HStack {
-                    Image(systemName: "folder.fill").foregroundStyle(.tint)
+                    Image(systemName: "folder.fill").foregroundStyle(Brand.indigo)
                     Text(outputFolder.isEmpty ? "No folder chosen" : (outputFolder as NSString).abbreviatingWithTildeInPath)
                         .lineLimit(1).truncationMode(.middle)
                         .foregroundStyle(outputFolder.isEmpty ? .secondary : .primary)
@@ -162,6 +178,7 @@ struct PillSegmented: View {
     let options: [(String, String)]
     @Binding var selection: String
     @Namespace private var thumb
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 2) {
@@ -174,135 +191,144 @@ struct PillSegmented: View {
                     .padding(.vertical, 5)
                     .background {
                         if selected {
-                            Capsule().fill(Color.white.opacity(0.14))
-                                .overlay(Capsule().strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5))
-                                .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
+                            Capsule()
+                                .fill(scheme == .dark ? Color.white.opacity(0.16) : Color.white)
+                                .shadow(color: .black.opacity(scheme == .dark ? 0.3 : 0.12), radius: 2, y: 1)
                                 .matchedGeometryEffect(id: "thumb", in: thumb)
                         }
                     }
                     .contentShape(Capsule())
                     .onTapGesture {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selection = value }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) { selection = value }
                     }
+                    .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
             }
         }
         .padding(3)
-        .background(Capsule().fill(Color.white.opacity(0.06)))
+        .background(Capsule().fill(Color.primary.opacity(scheme == .dark ? 0.08 : 0.07)))
     }
 }
 
-/// A row of rounded ticks that fill from the left, after the meters in Pulse-style panels.
-struct TickBar: View {
-    var value: Double
-    var count = 36
-    var paused = false
-    var running = false
-    var tint: Color = .orange
-    var height: CGFloat = 22
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: !running || paused)) { timeline in
-            let filled = Int((min(max(value, 0), 1) * Double(count)).rounded(.down))
-            let pulse = (sin(timeline.date.timeIntervalSinceReferenceDate * 5) + 1) / 2
-            HStack(spacing: 3) {
-                ForEach(0..<count, id: \.self) { i in
-                    Capsule()
-                        .fill(color(i, filled: filled, pulse: pulse))
-                        .frame(height: height)
-                }
-            }
-        }
-        .animation(.easeOut(duration: 0.25), value: Int(value * Double(count)))
-    }
-
-    private func color(_ i: Int, filled: Int, pulse: Double) -> Color {
-        let active = paused ? Color.yellow : tint
-        if i < filled { return active }
-        if i == filled && running { return active.opacity(0.35 + 0.5 * pulse) }
-        let distance = Double(i - filled)
-        return Color.white.opacity(max(0.07, 0.5 - distance * 0.09))
-    }
-}
-
-/// Ruler-style quality picker: drag along the ticks, tap a preset name, or reset to Balanced.
+/// Compression ruler. Light purple on the left is light compression; deep purple on the right is the strongest.
+/// The binding is the encoder quality (0 = smallest files, 100 = best quality); the ruler shows compression = 100 - quality.
 struct QualityRuler: View {
-    @Binding var value: Int
-    private let ticks = 25
-    private let presets: [(String, Int)] = [("Smaller", 20), ("Balanced", 50), ("Better", 80)]
+    @Binding var quality: Int
+    private let ticks = 28
+    private let presets: [(String, Int)] = [("Light", 20), ("Balanced", 50), ("Strong", 80)]
+
+    private var compression: Int { 100 - quality }
+
+    static func color(at compression: Double) -> Color {
+        Brand.mix(Brand.lightPurple, Brand.darkPurple, compression / 100)
+    }
+
+    /// Same hue family, kept dark enough to read as text on light and dark backgrounds.
+    static func textColor(at compression: Double) -> Color {
+        Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.55 + compression / 250)
+    }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
                 ForEach(presets, id: \.0) { name, target in
-                    let selected = CompressModel.qualityName(value).hasPrefix(name)
-                    Text(name)
-                        .font(.callout.weight(selected ? .semibold : .regular))
-                        .foregroundStyle(selected ? Color.accentColor : .secondary)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture { withAnimation(.spring(response: 0.3)) { value = target } }
+                    let selected = presetName == name
+                    Button {
+                        withAnimation(.spring(response: 0.3)) { quality = 100 - target }
+                    } label: {
+                        Text(name)
+                            .font(.callout.weight(selected ? .semibold : .regular))
+                            .foregroundStyle(selected ? AnyShapeStyle(Self.textColor(at: Double(target))) : AnyShapeStyle(.secondary))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             HStack(spacing: 12) {
-                Text("\(value)")
-                    .font(.system(size: 22, weight: .medium, design: .rounded))
+                Text("\(compression)")
+                    .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Self.textColor(at: Double(compression)))
                     .frame(width: 38, alignment: .leading)
-                    .contentTransition(.numericText(value: Double(value)))
+                    .contentTransition(.numericText(value: Double(compression)))
                 GeometryReader { geo in
                     let width = geo.size.width
-                    let x = width * CGFloat(value) / 100
+                    let x = width * CGFloat(compression) / 100
                     ZStack(alignment: .leading) {
                         HStack(spacing: 0) {
                             ForEach(0...ticks, id: \.self) { i in
                                 let position = Double(i) / Double(ticks) * 100
-                                let major = i % 6 == 0
+                                let active = position <= Double(compression)
+                                let major = i % 7 == 0
                                 Capsule()
-                                    .fill(position <= Double(value) ? Color.accentColor.opacity(0.85) : Color.white.opacity(0.28))
-                                    .frame(width: major ? 2 : 1.5, height: position <= Double(value) ? (major ? 26 : 22) : (major ? 22 : 14))
+                                    .fill(active ? Self.color(at: position) : Color.primary.opacity(0.22))
+                                    .frame(width: major ? 2.5 : 2, height: active ? (major ? 26 : 22) : (major ? 20 : 13))
                                 if i < ticks { Spacer(minLength: 0) }
                             }
                         }
                         .frame(maxHeight: .infinity)
                         Capsule()
-                            .fill(Color.accentColor)
-                            .frame(width: 2.5, height: 40)
-                            .shadow(color: Color.accentColor.opacity(0.7), radius: 4)
-                            .offset(x: x - 1.25)
+                            .fill(Self.color(at: Double(compression)))
+                            .frame(width: 3, height: 40)
+                            .shadow(color: Self.color(at: Double(compression)).opacity(0.6), radius: 4)
+                            .offset(x: x - 1.5)
                     }
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
-                        value = Int((min(max(drag.location.x / width, 0), 1) * 100).rounded())
+                        let c = Int((min(max(drag.location.x / width, 0), 1) * 100).rounded())
+                        quality = 100 - c
                     })
                 }
                 .frame(height: 40)
                 Button {
-                    withAnimation(.spring(response: 0.3)) { value = 50 }
+                    withAnimation(.spring(response: 0.3)) { quality = 50 }
                 } label: {
                     Image(systemName: "arrow.counterclockwise").font(.body.weight(.semibold))
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(value == 50 ? .tertiary : .secondary)
-                .help("Reset to Balanced (the skill's defaults)")
+                .foregroundStyle(quality == 50 ? .tertiary : .secondary)
+                .help("Reset to Balanced")
             }
             .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(Capsule().fill(Color.white.opacity(0.06)))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5))
+            .padding(.vertical, 8)
+            .background(Capsule().fill(Color.primary.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Compression")
+            .accessibilityValue("\(compression), \(presetName)")
+            .accessibilityAdjustableAction { direction in
+                switch direction {
+                case .increment: quality = max(0, quality - 5)
+                case .decrement: quality = min(100, quality + 5)
+                @unknown default: break
+                }
+            }
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+        }
+    }
+
+    private var presetName: String {
+        compression < 35 ? "Light" : compression <= 65 ? "Balanced" : "Strong"
+    }
+
+    private var caption: String {
+        switch presetName {
+        case "Light": return "Bigger files that look the same as the original."
+        case "Balanced": return "Much smaller files with no visible quality loss. Recommended."
+        default: return "Smallest files. Fine detail may look softer."
         }
     }
 }
 
-/// The dark rounded card used by Simple mode and the menu bar panel.
 struct PanelCard<Content: View>: View {
     @ViewBuilder var content: Content
     var body: some View {
         content
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 18).fill(Color.white.opacity(0.05)))
-            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(Color.white.opacity(0.07), lineWidth: 0.5))
+            .surfaceCard(cornerRadius: 18)
     }
 }
 
@@ -310,26 +336,25 @@ struct CapsLabel: View {
     let text: String
     init(_ text: String) { self.text = text }
     var body: some View {
-        Text(text.uppercased()).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.secondary).tracking(0.8)
+        Text(text.uppercased()).font(.system(size: 11, weight: .semibold, design: .monospaced)).foregroundStyle(.secondary).tracking(0.8)
     }
 }
 
-/// White pill for the main call to action, dark capsule for secondary ones.
+/// High-contrast pill for the main action, quiet capsule for secondary ones. Adapts to light and dark.
 struct PanelButtonStyle: ButtonStyle {
     var primary = false
     var tint: Color? = nil
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.body.weight(.semibold))
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
-            .foregroundStyle(primary ? Color.black : (tint ?? Color.primary))
-            .background(
-                Capsule().fill(primary ? Color.white : Color.white.opacity(0.08))
-            )
-            .overlay(Capsule().strokeBorder(Color.white.opacity(primary ? 0 : 0.08), lineWidth: 0.5))
-            .opacity(configuration.isPressed ? 0.75 : 1)
+            .foregroundStyle(primary ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor)) : AnyShapeStyle(tint ?? Color.primary))
+            .background(Capsule().fill(primary ? Color.primary.opacity(0.9) : Color.primary.opacity(0.07)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(primary ? 0 : 0.1), lineWidth: 0.75))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
