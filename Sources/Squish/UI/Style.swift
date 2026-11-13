@@ -8,6 +8,8 @@ enum Brand {
     static let darkPurple = Color(red: 0.36, green: 0.13, blue: 0.70)
     static let amber = Color(red: 0.96, green: 0.68, blue: 0.16)
     static let orange = Color(red: 0.98, green: 0.55, blue: 0.18)
+    /// #757575, the neutral used for in-progress status text.
+    static let statusGrey = Color(red: 0x75 / 255, green: 0x75 / 255, blue: 0x75 / 255)
     static let green = Color(red: 0.20, green: 0.74, blue: 0.42)
 
     /// Linear blend between two colors in sRGB, t in 0...1.
@@ -49,6 +51,8 @@ struct TickBar: View {
     var paused = false
     var running = false
     var done = false
+    /// Fills light grey to dark grey along the bar instead of orange.
+    var greyscale = false
     var tickWidth: CGFloat = 6
     var spacing: CGFloat = 3.5
     var height: CGFloat = 22
@@ -76,10 +80,11 @@ struct TickBar: View {
     }
 
     private func color(_ i: Int, count: Int, filled: Int, pulse: Double) -> Color {
-        let fill: Color = paused ? Brand.amber : done ? Brand.green : Brand.orange
+        let shade = Color.primary.opacity(0.22 + 0.63 * Double(i) / Double(max(count - 1, 1)))
+        let fill: Color = paused ? Brand.amber : done ? Brand.green : greyscale ? shade : Brand.orange
         if i < filled { return fill }
         if i == filled && running && !paused { return fill.opacity(0.3 + 0.55 * pulse) }
-        guard running || value > 0 else { return Color.primary.opacity(0.1) }
+        guard running || value > 0, !greyscale else { return Color.primary.opacity(0.08) }
         let distance = Double(i - filled)
         return Color.primary.opacity(max(0.1, 0.42 - distance * 0.08))
     }
@@ -92,7 +97,7 @@ struct MiniTickBar: View {
     var height: CGFloat = 10
 
     var body: some View {
-        TickBar(value: value, paused: paused, running: value < 1, tickWidth: 2.5, spacing: 2.5, height: max(height, 8))
+        TickBar(value: value, paused: paused, running: value < 1, greyscale: true, tickWidth: 2.5, spacing: 2.5, height: max(height, 8))
     }
 }
 
@@ -280,7 +285,7 @@ struct QualityRuler: View {
                 GeometryReader { geo in
                     let width = geo.size.width
                     let x = width * CGFloat(compression) / 100
-                    ZStack(alignment: .leading) {
+                    ZStack(alignment: .topLeading) {
                         HStack(spacing: 0) {
                             ForEach(0...ticks, id: \.self) { i in
                                 let position = Double(i) / Double(ticks) * 100
@@ -292,12 +297,20 @@ struct QualityRuler: View {
                                 if i < ticks { Spacer(minLength: 0) }
                             }
                         }
-                        .frame(maxHeight: .infinity)
+                        .frame(height: 40)
                         Capsule()
                             .fill(Self.color(at: Double(compression)))
                             .frame(width: 3, height: 40)
                             .shadow(color: Self.color(at: Double(compression)).opacity(0.6), radius: 4)
                             .offset(x: x - 1.5)
+                        ForEach([0, 25, 50, 75, 100], id: \.self) { mark in
+                            let near = abs(compression - mark) <= 4
+                            Text("\(mark)")
+                                .font(.system(size: 9, weight: near ? .bold : .medium, design: .monospaced))
+                                .foregroundStyle(near ? AnyShapeStyle(.primary) : AnyShapeStyle(.tertiary))
+                                .fixedSize()
+                                .position(x: width * CGFloat(mark) / 100, y: 50)
+                        }
                     }
                     .animation(.spring(response: 0.28, dampingFraction: 0.82), value: compression)
                     .contentShape(Rectangle())
@@ -306,7 +319,7 @@ struct QualityRuler: View {
                         quality = 100 - c
                     })
                 }
-                .frame(height: 40)
+                .frame(height: 56)
                 Button {
                     withAnimation(.spring(response: 0.3)) { quality = 50 }
                 } label: {
@@ -316,10 +329,10 @@ struct QualityRuler: View {
                 .foregroundStyle(quality == 50 ? .tertiary : .secondary)
                 .help("Reset to Balanced")
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(Capsule().fill(Color.primary.opacity(0.05)))
-            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
+            .background(RoundedRectangle(cornerRadius: 22).fill(Color.primary.opacity(0.05)))
+            .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(Color.primary.opacity(0.08), lineWidth: 0.75))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Compression")
             .accessibilityValue("\(compression), \(presetName)")
@@ -397,5 +410,75 @@ struct PanelButtonStyle: ButtonStyle {
             .opacity(isEnabled ? (configuration.isPressed ? 0.75 : 1) : 0.4)
             .scaleEffect(configuration.isPressed ? 0.98 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+/// Pick a built-in or saved preset, save the current settings as a preset, or delete one of yours.
+struct PresetMenu: View {
+    @Bindable var model: CompressModel
+    var compact = false
+    @State private var naming = false
+    @State private var name = ""
+
+    var body: some View {
+        Menu {
+            Section("Built-in") {
+                ForEach(EncodePreset.builtIns) { preset in item(preset) }
+            }
+            if !model.userPresets.isEmpty {
+                Section("Your presets") {
+                    ForEach(model.userPresets) { preset in item(preset) }
+                }
+            }
+            Divider()
+            Button("Save Current Settings as Preset…") {
+                name = model.activePreset.map { $0.builtIn ? "" : $0.name } ?? ""
+                naming = true
+            }
+            if !model.userPresets.isEmpty {
+                Menu("Delete Preset") {
+                    ForEach(model.userPresets) { preset in
+                        Button(preset.name, role: .destructive) { model.deletePreset(preset) }
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if !compact { Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary) }
+                Text(compact ? (model.activePreset?.name ?? "Custom") : "Preset: \(model.activePreset?.name ?? "Custom")")
+                    .font(compact ? .caption.weight(.semibold) : .callout)
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, compact ? 10 : 0)
+            .padding(.vertical, compact ? 4 : 0)
+            .background { if compact { Capsule().fill(Color.primary.opacity(0.07)) } }
+            .contentShape(Capsule())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(model.activePreset.map { "\($0.name): \($0.detail)" } ?? "Your settings don't match a preset. Save them to reuse later.")
+        .alert("Save preset", isPresented: $naming) {
+            TextField("Preset name", text: $name)
+            Button("Save") { model.savePreset(named: name) }
+                .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Saves the formats, compression, audio, frame rate, size, and speed (\(model.presetSummary)). Saving with an existing name replaces it.")
+        }
+    }
+
+    @ViewBuilder
+    private func item(_ preset: EncodePreset) -> some View {
+        Button { model.apply(preset) } label: {
+            if model.activePreset?.id == preset.id {
+                Label("\(preset.name) — \(preset.detail)", systemImage: "checkmark")
+            } else {
+                Text("\(preset.name) — \(preset.detail)")
+            }
+        }
     }
 }

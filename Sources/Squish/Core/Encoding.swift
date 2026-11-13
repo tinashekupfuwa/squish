@@ -52,7 +52,7 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     }
 }
 
-enum AudioMode: String, CaseIterable, Identifiable, Sendable {
+enum AudioMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case auto, keep, remove
     var id: String { rawValue }
     var label: String {
@@ -64,19 +64,19 @@ enum AudioMode: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum FrameRateMode: String, CaseIterable, Identifiable, Sendable {
+enum FrameRateMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case preserve, cap
     var id: String { rawValue }
     var label: String { self == .preserve ? "Same as source" : "Cap at ~30 fps (smaller files)" }
 }
 
-enum SpeedMode: String, CaseIterable, Identifiable, Sendable {
+enum SpeedMode: String, CaseIterable, Identifiable, Codable, Sendable {
     case skill, faster
     var id: String { rawValue }
     var label: String { self == .skill ? "Best (skill defaults, slowest)" : "Faster (slightly larger files)" }
 }
 
-struct EncodeSettings: Sendable {
+struct EncodeSettings: Codable, Equatable, Sendable {
     var vp9 = true
     var h265 = true
     var av1 = false

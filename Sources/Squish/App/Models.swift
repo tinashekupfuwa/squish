@@ -23,16 +23,62 @@ final class CompressJob: Identifiable {
 @Observable @MainActor
 final class CompressModel {
     var jobs: [CompressJob] = []
-    var settings = EncodeSettings()
+    var settings = EncodeSettings() {
+        didSet { Persistence.save(settings, key: "lastSettings") }
+    }
+    var userPresets: [EncodePreset] = [] {
+        didSet { Persistence.save(userPresets, key: "userPresets") }
+    }
     var isRunning = false
     var isPaused = false
     var isStopping = false
     /// 0 (smallest files) to 100 (best quality); 50 is the skill's defaults.
     var quality = 50 {
-        didSet { applyQuality() }
+        didSet {
+            applyQuality()
+            UserDefaults.standard.set(quality, forKey: "lastQuality")
+        }
     }
 
-    static func crf(for codec: Codec, quality: Int) -> Int {
+    init() {
+        if let saved = Persistence.load(EncodeSettings.self, key: "lastSettings") { settings = saved }
+        if UserDefaults.standard.object(forKey: "lastQuality") != nil { quality = UserDefaults.standard.integer(forKey: "lastQuality") }
+        userPresets = Persistence.load([EncodePreset].self, key: "userPresets") ?? []
+    }
+
+    var allPresets: [EncodePreset] { EncodePreset.builtIns + userPresets }
+
+    /// The preset whose settings match the current ones exactly, or nil when they've been customised.
+    var activePreset: EncodePreset? { allPresets.first { $0.settings == settings && $0.quality == quality } }
+
+    func apply(_ preset: EncodePreset) {
+        quality = preset.quality
+        settings = preset.settings
+    }
+
+    func savePreset(named rawName: String) {
+        let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let preset = EncodePreset(id: UUID(), name: name, detail: presetSummary, settings: settings, quality: quality)
+        if let index = userPresets.firstIndex(where: { $0.name.caseInsensitiveCompare(name) == .orderedSame }) {
+            userPresets[index] = EncodePreset(id: userPresets[index].id, name: name, detail: presetSummary, settings: settings, quality: quality)
+        } else {
+            userPresets.append(preset)
+        }
+    }
+
+    func deletePreset(_ preset: EncodePreset) { userPresets.removeAll { $0.id == preset.id } }
+
+    var presetSummary: String {
+        var parts = ["Compression \(100 - quality)"]
+        parts.append(settings.enabledCodecs.map(\.shortLabel).joined(separator: " + "))
+        if let width = settings.maxWidth { parts.append("\(width) px max") }
+        if settings.audio == .remove { parts.append("no audio") }
+        if settings.frameRate == .cap { parts.append("30 fps") }
+        return parts.joined(separator: ", ")
+    }
+
+    nonisolated static func crf(for codec: Codec, quality: Int) -> Int {
         let q = Double(min(max(quality, 0), 100))
         switch codec {
         case .h265: return Int((38 - q * 0.16).rounded())

@@ -48,7 +48,7 @@ struct QueueStatus: View {
         if model.jobs.isEmpty { return "Ready" }
         return "\(model.pending.count) waiting"
     }
-    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.orange : finished ? Brand.green : .primary }
+    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.statusGrey : finished ? Brand.green : .primary }
 
     private var detail: String {
         if let job = model.currentJob { return "\(job.url.lastPathComponent) · \(model.doneJobs.count + 1) of \(model.jobs.count)" }
@@ -82,7 +82,11 @@ struct SimpleView: View {
             queue
 
             VStack(alignment: .leading, spacing: 8) {
-                CapsLabel("Compression")
+                HStack {
+                    CapsLabel("Compression")
+                    Spacer()
+                    PresetMenu(model: model, compact: true)
+                }
                 QualityRuler(quality: $model.quality)
             }
             .disabled(model.isRunning)
