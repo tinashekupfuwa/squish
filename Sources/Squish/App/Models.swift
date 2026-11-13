@@ -19,7 +19,15 @@ final class CompressJob: Identifiable {
     var error: String?
     var html: String?
 
-    init(url: URL) { self.url = url }
+    /// Size on disk, read when the video is added so it is known before probing finishes.
+    let fileBytes: Int64
+
+    init(url: URL) {
+        self.url = url
+        fileBytes = ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? NSNumber)?.int64Value ?? 0
+    }
+
+    var bytes: Int64 { probe?.bytes ?? fileBytes }
 }
 
 @Observable @MainActor
@@ -141,6 +149,20 @@ final class CompressModel {
     func clearFinished() { jobs.removeAll { $0.state == .done } }
 
     var pending: [CompressJob] { jobs.filter { $0.state != .done && $0.state != .running } }
+
+    /// Videos above this size switch the overall meter to fine ticks weighted by size, so a long encode visibly moves.
+    static let largeVideoBytes: Int64 = 20_000_000_000
+
+    var hasLargeVideo: Bool { jobs.contains { $0.bytes > Self.largeVideoBytes } }
+
+    /// Overall progress for the big meter: by size when a large video is queued, otherwise per video.
+    var displayProgress: Double {
+        guard hasLargeVideo else { return overallProgress }
+        let active = jobs.filter { $0.state != .failed && $0.state != .cancelled }
+        let total = active.reduce(0.0) { $0 + Double($1.bytes) }
+        guard total > 0 else { return overallProgress }
+        return active.reduce(0.0) { $0 + Double($1.bytes) * ($1.state == .done ? 1 : $1.progress) } / total
+    }
 
     /// Progress across the jobs that are queued, running, or finished.
     var overallProgress: Double {

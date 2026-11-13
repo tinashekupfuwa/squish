@@ -14,9 +14,17 @@ enum Snapshots {
         fill(stopping.compress)
         stopping.compress.isStopping = true
         stopping.compress.quality = 0
+        let large = AppState()
+        fill(large.compress)
+        large.compress.quality = 35
+        if let job = large.compress.jobs.first(where: { $0.state == .running }), let p = job.probe {
+            job.probe = ProbeInfo(source: p.source, bytes: 24_600_000_000, duration: 5400, codedWidth: 3840, codedHeight: 2160, rotation: 0, fps: p.fps, pixFmt: "yuv420p10le", videoCodec: "prores", profile: "", level: 0, bitRate: 0, audio: [])
+            job.progress = 0.31
+        }
         let shots: [(String, AnyView, NSSize)] = [
             ("simple-empty", AnyView(SimpleView(model: empty.compress).environment(empty)), AppSize.simple),
             ("simple-running", AnyView(SimpleView(model: busy.compress).environment(busy)), AppSize.simple),
+            ("simple-large", AnyView(SimpleView(model: large.compress).environment(large)), AppSize.simple),
             ("simple-stopping", AnyView(SimpleView(model: stopping.compress).environment(stopping)), AppSize.simple),
             ("menubar", AnyView(MenuBarPanel().environment(busy)), NSSize(width: 320, height: 470)),
             ("advanced-compress", AnyView(CompressView(model: busy.compress).environment(busy)), NSSize(width: AppSize.advanced.width - 200, height: AppSize.advanced.height - 52)),

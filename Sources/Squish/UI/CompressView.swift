@@ -59,17 +59,21 @@ struct CompressView: View {
                     Text(summary).font(.callout.weight(.medium)).lineLimit(1).contentTransition(.numericText())
                     Spacer()
                     if model.isRunning || model.overallProgress > 0 {
-                        Text("\(Int((model.overallProgress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
+                        Text("\(Int((model.displayProgress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                             .contentTransition(.numericText())
                     }
                 }
-                SegmentedProgressBar(
-                    segments: model.jobs.map { $0.state == .done || $0.state == .failed ? 1 : $0.progress },
-                    active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
-                    failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
-                    paused: model.isPaused || model.isStopping,
-                    height: 8
-                )
+                if model.hasLargeVideo {
+                    TickBar(value: model.displayProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 12)
+                } else {
+                    SegmentedProgressBar(
+                        segments: model.jobs.map { $0.state == .done || $0.state == .failed ? 1 : $0.progress },
+                        active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
+                        failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
+                        paused: model.isPaused || model.isStopping,
+                        height: 8
+                    )
+                }
             }
             Menu {
                 Button("Clear finished") { withAnimation(.spring) { model.clearFinished() } }.disabled(!model.jobs.contains { $0.state == .done })

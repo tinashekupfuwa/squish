@@ -28,13 +28,17 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            SegmentedProgressBar(
-                segments: model.jobs.map { $0.state == .done ? 1 : $0.state == .failed ? 1 : $0.progress },
-                active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
-                failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
-                paused: model.isPaused || model.isStopping,
-                done: finished
-            )
+            if model.hasLargeVideo {
+                TickBar(value: finished ? 1 : model.displayProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 30)
+            } else {
+                SegmentedProgressBar(
+                    segments: model.jobs.map { $0.state == .done ? 1 : $0.state == .failed ? 1 : $0.progress },
+                    active: model.isRunning ? model.jobs.firstIndex { $0.state == .running } : nil,
+                    failed: Set(model.jobs.indices.filter { model.jobs[$0].state == .failed }),
+                    paused: model.isPaused || model.isStopping,
+                    done: finished
+                )
+            }
         }
     }
 
@@ -42,7 +46,7 @@ struct QueueStatus: View {
 
     private var bigNumber: String {
         if finished { return "\(Int((model.savedRatio * 100).rounded()))" }
-        return "\(Int((model.overallProgress * 100).rounded()))"
+        return "\(Int((model.displayProgress * 100).rounded()))"
     }
     private var unit: String { finished ? "% smaller" : "%" }
 
