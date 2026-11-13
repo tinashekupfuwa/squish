@@ -7,7 +7,16 @@ struct CompressView: View {
         HStack(spacing: 0) {
             Form {
                 Section("Preset") {
-                    PresetMenu(model: model)
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(model.activePreset?.name ?? "Your own settings")
+                            Text(model.activePreset?.detail ?? "Not saved as a preset yet")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 8)
+                        PresetMenu(model: model, title: "Change")
+                    }
                 }
                 CodecSettingsSection(settings: $model.settings)
                 DestinationSection()

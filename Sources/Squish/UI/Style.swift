@@ -543,7 +543,8 @@ private struct PanelButtonBackground: ViewModifier {
 /// Pick a built-in or saved preset, save the current settings as a preset, or delete one of yours.
 struct PresetMenu: View {
     @Bindable var model: CompressModel
-    var compact = false
+    /// Button text; defaults to the active preset's name, or "Presets" when the settings match none.
+    var title: String? = nil
     @State private var naming = false
     @State private var name = ""
 
@@ -571,16 +572,15 @@ struct PresetMenu: View {
             }
         } label: {
             HStack(spacing: 6) {
-                if !compact { Image(systemName: "slider.horizontal.3").foregroundStyle(.secondary) }
-                Text(model.activePreset?.name ?? "Presets")
-                    .font(compact ? .caption.weight(.semibold) : .callout)
+                Text(title ?? model.activePreset?.name ?? "Presets")
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
             }
-            .padding(.horizontal, compact ? 10 : 0)
-            .padding(.vertical, compact ? 4 : 0)
-            .modifier(GlassControl(shape: Capsule(), fallback: compact ? Color.primary.opacity(0.07) : .clear))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(0.07)))
             .contentShape(Capsule())
         }
         .menuStyle(.button)

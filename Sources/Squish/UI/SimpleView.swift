@@ -94,7 +94,7 @@ struct SimpleView: View {
                 HStack {
                     CapsLabel("Compression")
                     Spacer()
-                    PresetMenu(model: model, compact: true)
+                    PresetMenu(model: model)
                 }
                 QualityRuler(quality: $model.quality)
             }
