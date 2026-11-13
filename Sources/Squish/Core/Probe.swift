@@ -31,6 +31,7 @@ struct Rational: Hashable, Codable, CustomStringConvertible, Sendable {
 struct AudioStream: Hashable, Sendable {
     let codec: String
     let channels: Int
+    var layout: String = ""
 }
 
 struct ProbeInfo: Hashable, Sendable {
@@ -105,7 +106,7 @@ enum Probe {
             bytes = size.int64Value
         }
         let audio = streams.filter { $0["codec_type"] as? String == "audio" }.map {
-            AudioStream(codec: $0["codec_name"] as? String ?? "?", channels: Int(number($0["channels"]) ?? 0))
+            AudioStream(codec: $0["codec_name"] as? String ?? "?", channels: Int(number($0["channels"]) ?? 0), layout: $0["channel_layout"] as? String ?? "")
         }
         return ProbeInfo(
             source: source,

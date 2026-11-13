@@ -55,11 +55,26 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
         }
     }
 
-    /// Surround and multichannel recorder audio (4.0, 5.1, separate mics) is mixed to stereo: Opus rejects many
-    /// of those layouts, and browsers play stereo anyway.
-    func audioFlags(keep: Bool, channels: Int) -> [String] {
+    /// Every source channel is kept, never mixed down, at 96 kb/s per channel for Opus and 128 kb/s per channel for AAC,
+    /// above the rates listening tests treat as transparent. Opus only accepts the Vorbis surround layouts, so any other
+    /// layout up to 8 channels (a recorder's 4.0, 5.1 with side channels, unlabelled tracks) is relabelled by position
+    /// without touching the samples. Tracks the Vorbis layouts can't hold without inventing a band-limited LFE channel,
+    /// and anything over 8 channels, are encoded as independent discrete channels.
+    func audioFlags(keep: Bool, audio: AudioStream?) -> [String] {
         guard keep else { return ["-an"] }
-        return ["-map", "0:a:0", "-c:a", self == .h265 ? "aac" : "libopus"] + (channels > 2 ? ["-ac", "2"] : [])
+        let channels = max(audio?.channels ?? 2, 1)
+        guard self != .h265 else {
+            return ["-map", "0:a:0", "-c:a", "aac", "-b:a", "\(128 * channels)k"]
+        }
+        var flags = ["-map", "0:a:0", "-c:a", "libopus", "-b:a", "\(96 * channels)k"]
+        guard channels > 2 else { return flags }
+        let opusLayouts = ["3.0", "quad", "5.0", "5.1", "6.1", "7.1"]
+        let target = channels <= opusLayouts.count + 2 ? opusLayouts[channels - 3] : ""
+        let hasLFE = audio?.layout.contains(".1") ?? false
+        if target.isEmpty || (target.contains(".1") && !hasLFE) { return flags + ["-mapping_family", "255"] }
+        flags += ["-mapping_family", "1"]
+        if audio?.layout != target { flags += ["-af", "channelmap=channel_layout=\(target)"] }
+        return flags
     }
 }
 
@@ -204,7 +219,7 @@ enum Encoder {
         args += codec.videoFlags(crf: crf, pixFmt: settings.pixFmt, speed: settings.speed)
         let chain = Filters.chain(probe, maxWidth: maxWidth, frameRate: settings.frameRate)
         if !chain.isEmpty { args += ["-vf", chain] }
-        args += codec.audioFlags(keep: keepAudio, channels: probe.audio.first?.channels ?? 0)
+        args += codec.audioFlags(keep: keepAudio, audio: probe.audio.first)
         args.append(output.path)
         return args
     }
