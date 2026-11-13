@@ -370,84 +370,89 @@ struct QualityRuler: View {
              : Brand.mix(Brand.lightPurple, Brand.darkPurple, 0.55 + compression / 250)
     }
 
+    private let numberWidth: CGFloat = 46
+    private let resetWidth: CGFloat = 18
+    private let trackGap: CGFloat = 8
+    /// Keeps 0 and 100 inside the track, on the first and last ticks.
+    private let trackInset: CGFloat = 11
+
+    private func trackX(_ value: CGFloat, width: CGFloat) -> CGFloat {
+        trackInset + (width - trackInset * 2) * value / 100
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                ForEach(presets, id: \.0) { name, target in
-                    let selected = presetName == name
-                    Button {
-                        withAnimation(.spring(response: 0.3)) { quality = 100 - target }
-                    } label: {
-                        Text(name)
-                            .font(.callout.weight(selected ? .semibold : .regular))
-                            .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                            .frame(maxWidth: .infinity)
-                            .animation(.easeOut(duration: 0.2), value: selected)
+            VStack(spacing: 2) {
+                HStack(spacing: trackGap) {
+                    Color.clear.frame(width: numberWidth, height: 1)
+                    ZStack {
+                        presetButton("Light", 20, alignment: .leading)
+                        presetButton("Balanced", 50, alignment: .center)
+                        presetButton("Strong", 80, alignment: .trailing)
                     }
-                    .buttonStyle(.plain)
+                    .frame(maxWidth: .infinity)
+                    Color.clear.frame(width: resetWidth, height: 1)
                 }
-            }
-            HStack(alignment: .top, spacing: 12) {
-                Text("\(compression)")
-                    .font(.system(size: 34, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .frame(width: 64, height: 40, alignment: .leading)
-                    .contentTransition(.numericText(value: Double(compression)))
-                GeometryReader { geo in
-                    let width = geo.size.width
-                    let x = width * CGFloat(compression) / 100
-                    ZStack(alignment: .topLeading) {
-                        HStack(spacing: 0) {
+                .frame(height: 22)
+                HStack(alignment: .top, spacing: trackGap) {
+                    Text("\(compression)")
+                        .font(.system(size: 34, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(Self.textColor(at: Double(compression), dark: scheme == .dark))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .frame(width: numberWidth, height: 40, alignment: .leading)
+                        .contentTransition(.numericText(value: Double(compression)))
+                    GeometryReader { geo in
+                        let width = geo.size.width
+                        ZStack {
                             ForEach(0...ticks, id: \.self) { i in
-                                let position = Double(i) / Double(ticks) * 100
-                                let active = position <= Double(compression)
+                                let position = CGFloat(i) / CGFloat(ticks) * 100
+                                let active = position <= CGFloat(compression)
                                 let major = i % 7 == 0
                                 Capsule()
                                     .fill(active ? Self.color(at: position) : Color.primary.opacity(0.22))
                                     .frame(width: major ? 2.5 : 2, height: active ? (major ? 26 : 22) : (major ? 20 : 13))
-                                if i < ticks { Spacer(minLength: 0) }
+                                    .position(x: trackX(position, width: width), y: 20)
+                            }
+                            Capsule()
+                                .fill(Self.color(at: Double(compression)))
+                                .frame(width: 3, height: 40)
+                                .shadow(color: Self.color(at: Double(compression)).opacity(0.6), radius: 4)
+                                .position(x: trackX(CGFloat(compression), width: width), y: 20)
+                            ForEach([0, 25, 50, 75, 100], id: \.self) { mark in
+                                let near = abs(compression - mark) <= 4
+                                Text("\(mark)")
+                                    .font(.system(size: 10, weight: near ? .bold : .medium, design: .monospaced))
+                                    .foregroundStyle(near ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                                    .fixedSize()
+                                    .position(x: trackX(CGFloat(mark), width: width), y: 50)
                             }
                         }
-                        .frame(height: 40)
-                        Capsule()
-                            .fill(Self.color(at: Double(compression)))
-                            .frame(width: 3, height: 40)
-                            .shadow(color: Self.color(at: Double(compression)).opacity(0.6), radius: 4)
-                            .offset(x: x - 1.5)
-                        ForEach([0, 25, 50, 75, 100], id: \.self) { mark in
-                            let near = abs(compression - mark) <= 4
-                            Text("\(mark)")
-                                .font(.system(size: 10, weight: near ? .bold : .medium, design: .monospaced))
-                                .foregroundStyle(near ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                                .fixedSize()
-                                .position(x: width * CGFloat(mark) / 100, y: 50)
-                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .contentShape(Rectangle())
+                        .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
+                            let span = max(width - trackInset * 2, 1)
+                            let value = min(max((drag.location.x - trackInset) / span, 0), 1)
+                            quality = 100 - Int((value * 100).rounded())
+                        })
                     }
-                    .animation(.spring(response: 0.28, dampingFraction: 0.82), value: compression)
-                    .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 0).onChanged { drag in
-                        let c = Int((min(max(drag.location.x / width, 0), 1) * 100).rounded())
-                        quality = 100 - c
-                    })
+                    .frame(height: 58)
+                    Button {
+                        withAnimation(.spring(response: 0.3)) { quality = 50 }
+                    } label: {
+                        Image(systemName: "arrow.counterclockwise").font(.body.weight(.semibold))
+                            .frame(width: resetWidth, height: 40)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .opacity(quality == 50 ? 0.5 : 1)
+                    .help("Reset to Balanced")
+                    .accessibilityLabel("Reset to Balanced")
                 }
-                .frame(height: 56)
-                Button {
-                    withAnimation(.spring(response: 0.3)) { quality = 50 }
-                } label: {
-                    Image(systemName: "arrow.counterclockwise").font(.body.weight(.semibold))
-                        .frame(height: 40)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .opacity(quality == 50 ? 0.5 : 1)
-                .help("Reset to Balanced")
-                .accessibilityLabel("Reset to Balanced")
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 6)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
             .surfaceCard()
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("Compression")
@@ -482,11 +487,25 @@ struct QualityRuler: View {
         compression < 35 ? "Light" : compression <= 65 ? "Balanced" : "Strong"
     }
 
+    private func presetButton(_ name: String, _ target: Int, alignment: Alignment) -> some View {
+        let selected = presetName == name
+        return Button {
+            withAnimation(.spring(response: 0.3)) { quality = 100 - target }
+        } label: {
+            Text(name)
+                .font(.callout.weight(selected ? .semibold : .regular))
+                .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+                .frame(maxWidth: .infinity, alignment: alignment)
+                .animation(.easeOut(duration: 0.2), value: selected)
+        }
+        .buttonStyle(.plain)
+    }
+
     private var caption: String {
         switch presetName {
-        case "Light": return "Largest picture. This slider does not change the audio."
-        case "Balanced": return abs(compression - 50) <= 2 ? "Recommended. Smaller picture, no visible loss. Audio is unchanged." : "Smaller picture, no visible loss. Audio is unchanged."
-        default: return "Smallest picture. Fine detail may look softer. Audio is unchanged."
+        case "Light": return "Largest file. This slider does not change the audio."
+        case "Balanced": return abs(compression - 50) <= 2 ? "Recommended. Smaller file, no visible loss. Audio is unchanged." : "Smaller file, no visible loss. Audio is unchanged."
+        default: return "Smallest file. Fine detail may look softer. Audio is unchanged."
         }
     }
 }
