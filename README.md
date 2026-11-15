@@ -32,4 +32,4 @@ Squish.app/Contents/MacOS/Squish optimize ./website http://localhost:3000 [--pag
 Squish.app/Contents/MacOS/Squish restore "~/Library/Application Support/Squish/Backups/<run>"
 ```
 
-"Standard" speed (the default) uses x265 `-preset slow`. "Extra compression" uses `-preset veryslow` and `-deadline best` for slightly smaller files at much longer encode times. Scan & optimize still makes VP9 WebM fallbacks for websites.
+"Fastest" (the default) encodes on the Mac's video chip with `hevc_videotoolbox`: about 20× faster than x265 on 4K60 4:2:2 footage, with files two to three times as big for the same quality. "Smallest file" uses x265 `-preset slow`. "Extra compression" uses `-preset veryslow` and `-deadline best` for slightly smaller files at much longer encode times. Scan & optimize still makes VP9 WebM fallbacks for websites.

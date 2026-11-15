@@ -98,7 +98,7 @@ struct SimpleView: View {
                 FFmpegSetupCard { toolsFound = Tools.locate("ffmpeg") != nil }
             }
 
-            PanelCard { QueueStatus(model: model) }
+            if !model.jobs.isEmpty { PanelCard { QueueStatus(model: model) } }
 
             queue
 
@@ -121,34 +121,20 @@ struct SimpleView: View {
                 HStack {
                     CapsLabel("Compression")
                     Spacer()
-                    Menu {
-                        ForEach(SpeedMode.allCases) { mode in
-                            Button {
-                                model.settings.speed = mode
-                            } label: {
-                                if model.settings.speed == mode { Label(mode.label, systemImage: "checkmark") } else { Text(mode.label) }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 6) {
-                            Text(model.settings.speed.shortLabel).font(.caption.weight(.semibold)).lineLimit(1)
-                            Image(systemName: "chevron.up.chevron.down").font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 10).padding(.vertical, 4)
-                        .modifier(GlassControl(shape: Capsule(), fallback: Color.primary.opacity(0.07)))
-                    }
-                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
-                    .help("Media Engine uses the Mac's video chip and finishes much faster. The file is larger than Standard for the same look.")
                     PresetMenu(model: model)
                 }
                 QualityRuler(quality: Binding(get: { model.quality }, set: { model.setQuality($0) }))
-                if !model.jobs.isEmpty {
-                    Text(model.settings.planLine)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .padding(.horizontal, 4)
-                }
+                PillSegmented(options: [("fast", "Fastest"), ("small", "Smallest file")], selection: Binding(
+                    get: { model.settings.speed == .hardware ? "fast" : "small" },
+                    set: { model.settings.speed = $0 == "fast" ? .hardware : .faster }
+                ))
+                .accessibilityLabel("Speed")
+                Text(model.settings.speed.consequence)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
             }
             }
 
@@ -178,7 +164,7 @@ struct SimpleView: View {
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 280)
                         .padding(.top, 10)
-                    Text("Saved next to the original, which is never changed.")
+                    Text("Your originals are never changed.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)

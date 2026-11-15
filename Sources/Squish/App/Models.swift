@@ -74,6 +74,11 @@ final class CompressModel {
             Persistence.save(settings, key: "lastSettings")
             UserDefaults.standard.set(true, forKey: "h265DefaultsApplied")
         }
+        if !UserDefaults.standard.bool(forKey: "fastestDefaultApplied") {
+            settings.speed = .hardware
+            Persistence.save(settings, key: "lastSettings")
+            UserDefaults.standard.set(true, forKey: "fastestDefaultApplied")
+        }
         userPresets = Persistence.load([EncodePreset].self, key: "userPresets") ?? []
     }
 
@@ -281,7 +286,7 @@ final class CompressModel {
                 job.notes.append(kept.contains("422") || kept.contains("444") ? "Color sampling kept at \(sampling). Some phones only play 4:2:0" : "Color reduced to 4:2:0 so browsers can play it")
             }
             if s.speed == .hardware {
-                job.notes.append(probe.pixFmt.contains("444") ? "Media Engine can't keep 4:4:4, so this one uses the standard encoder" : "Encoded on the Media Engine. Faster, and the file is larger than Standard for the same look")
+                job.notes.append(probe.pixFmt.contains("444") ? "Media Engine can't keep 4:4:4, so this one uses the standard encoder" : "Encoded on the Mac's video chip (Fastest)")
             }
             if audio.keep {
                 job.notes.append(s.losslessAudio ? "Audio saved lossless (ALAC), every channel kept" : "Audio saved as AAC, 128 kb/s per channel")

@@ -54,7 +54,8 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
             return ["-c:v", "libsvtav1", "-b:v", "0", "-crf", "\(crf)", "-preset", "8", "-pix_fmt", pixFmt]
         case (.h265, .hardware):
             let profile = pixFmt == "p210le" ? "main42210" : pixFmt == "p010le" ? "main10" : "main"
-            let quality = min(100, max(1, Int((50 + Double(38 - crf) / 0.16 * 0.35).rounded())))
+            // Matched to x265 on real 4K60 4:2:2 camera footage: CRF 30 and quality 45 both score about VMAF 82.
+            let quality = min(100, max(1, Int((45 + Double(30 - crf) * 1.6).rounded())))
             return ["-c:v", "hevc_videotoolbox", "-profile:v", profile, "-q:v", "\(quality)", "-allow_sw", "0", "-prio_speed", "0", "-tag:v", "hvc1", "-movflags", "faststart", "-pix_fmt", pixFmt]
         case (_, .hardware):
             return videoFlags(crf: crf, pixFmt: pixFmt, speed: .faster)
@@ -109,15 +110,16 @@ enum SpeedMode: String, CaseIterable, Identifiable, Codable, Sendable {
     var label: String {
         switch self {
         case .skill: return "Extra compression (much slower)"
-        case .faster: return "Standard"
-        case .hardware: return "Media Engine (much faster)"
+        case .faster: return "Smallest file (slow)"
+        case .hardware: return "Fastest (Media Engine)"
         }
     }
-    var shortLabel: String {
+    /// What the choice costs, in one line.
+    var consequence: String {
         switch self {
-        case .skill: return "Extra"
-        case .faster: return "Standard"
-        case .hardware: return "Media Engine"
+        case .hardware: return "About 20× faster. Files are two to three times as big."
+        case .faster: return "Smallest files. A long 4K video can take a day."
+        case .skill: return "Slightly smaller again, and several times slower than that."
         }
     }
 }
@@ -131,7 +133,7 @@ struct EncodeSettings: Codable, Equatable, Sendable {
     var frameRate: FrameRateMode = .preserve
     var tenBit = true
     var maxWidth: Int? = nil
-    var speed: SpeedMode = .faster
+    var speed: SpeedMode = .hardware
     /// ALAC in the MP4, bit-exact. WebM has no lossless audio, so Opus stays at the high bitrate above.
     var losslessAudio = true
 
@@ -145,8 +147,7 @@ struct EncodeSettings: Codable, Equatable, Sendable {
         }
         var size = maxWidth.map { "\($0) px wide" } ?? "original size"
         if frameRate == .cap { size += ", 30 fps max" }
-        let engine = speed == .hardware ? " · Media Engine" : ""
-        return "\(formats)\(engine) · \(sound) · \(size)"
+        return "\(formats) · \(sound) · \(size)"
     }
 
     init() {}
@@ -200,7 +201,7 @@ struct EncodeSettings: Codable, Equatable, Sendable {
         frameRate = try c.decodeIfPresent(FrameRateMode.self, forKey: .frameRate) ?? .preserve
         tenBit = try c.decodeIfPresent(Bool.self, forKey: .tenBit) ?? true
         maxWidth = try c.decodeIfPresent(Int.self, forKey: .maxWidth) ?? nil
-        speed = try c.decodeIfPresent(SpeedMode.self, forKey: .speed) ?? .faster
+        speed = try c.decodeIfPresent(SpeedMode.self, forKey: .speed) ?? .hardware
         losslessAudio = try c.decodeIfPresent(Bool.self, forKey: .losslessAudio) ?? true
     }
 
@@ -346,8 +347,17 @@ enum Encoder {
     /// Runs one encode and returns the command line that produced it.
     static func encode(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL, speed: (@Sendable (Double) -> Void)? = nil, progress: @escaping @Sendable (Double) -> Void) async throws -> String {
         let args = arguments(input: input, probe: probe, codec: codec, crf: crf, settings: settings, keepAudio: keepAudio, maxWidth: maxWidth, output: output)
-        try await runWithProgress(args, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
-        return Runner.commandLine("ffmpeg", args)
+        do {
+            try await runWithProgress(args, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
+            return Runner.commandLine("ffmpeg", args)
+        } catch where settings.speed == .hardware && !(error is CancellationError) && !Task.isCancelled {
+            // Older Macs have no hardware encoder for some formats (10-bit 4:2:2 needs Apple silicon), so use the software one.
+            var software = settings
+            software.speed = .faster
+            let fallback = arguments(input: input, probe: probe, codec: codec, crf: crf, settings: software, keepAudio: keepAudio, maxWidth: maxWidth, output: output)
+            try await runWithProgress(fallback, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
+            return Runner.commandLine("ffmpeg", fallback)
+        }
     }
 
     static func runWithProgress(_ args: [String], duration: Double, progress: @escaping @Sendable (Double) -> Void, speed: (@Sendable (Double) -> Void)? = nil, cleanup: URL?) async throws {

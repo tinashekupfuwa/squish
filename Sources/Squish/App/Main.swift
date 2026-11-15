@@ -40,7 +40,7 @@ enum CLI {
             settings.av1 = flags.contains("--av1")
             settings.vp9 = flags.contains("--vp9")
             if flags.contains("--cap-fps") { settings.frameRate = .cap }
-            if flags.contains("--faster") { settings.speed = .faster }
+            if flags.contains("--faster") || flags.contains("--smallest") { settings.speed = .faster }
             if flags.contains("--media-engine") { settings.speed = .hardware }
             for path in positional {
                 let input = URL(fileURLWithPath: path)
