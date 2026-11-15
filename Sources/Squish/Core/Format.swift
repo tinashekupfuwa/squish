@@ -35,6 +35,14 @@ enum Fmt {
         String(format: x < 1 ? "%.2f× real time" : x < 10 ? "%.1f× real time" : "%.0f× real time", x)
     }
 
+    /// Time remaining in plain words, e.g. "11 h 20 min left".
+    static func timeLeft(_ seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 60 else { return "under a minute left" }
+        let minutes = Int((seconds / 60).rounded())
+        if minutes < 60 { return "\(minutes) min left" }
+        return minutes % 60 == 0 ? "\(minutes / 60) h left" : "\(minutes / 60) h \(minutes % 60) min left"
+    }
+
     static func dB(_ value: Double) -> String {
         value.isFinite ? String(format: "%.1f dBFS", value) : "-inf dBFS"
     }

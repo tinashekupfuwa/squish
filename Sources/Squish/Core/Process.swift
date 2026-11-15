@@ -1,6 +1,23 @@
 import Foundation
 import IOKit.pwr_mgt
 
+/// Every child process Squish has running, so quitting never leaves an encoder working with no window.
+enum Children {
+    private static let lock = NSLock()
+    private static var pids: Set<pid_t> = []
+
+    static func add(_ pid: pid_t) { lock.lock(); pids.insert(pid); lock.unlock() }
+    static func remove(_ pid: pid_t) { lock.lock(); pids.remove(pid); lock.unlock() }
+    static func terminateAll() {
+        lock.lock()
+        defer { lock.unlock() }
+        for pid in pids {
+            kill(pid, SIGCONT)
+            kill(pid, SIGTERM)
+        }
+    }
+}
+
 /// Holds the Mac awake and unsleeping while a conversion is running, and asks for user-initiated CPU time.
 enum StayAwake {
     private static let lock = NSLock()
@@ -198,6 +215,7 @@ enum Runner {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<RunResult, Error>) in
                 process.terminationHandler = { finished in
                     group?.unregister(finished.processIdentifier)
+                    Children.remove(finished.processIdentifier)
                     outPipe.fileHandleForReading.readabilityHandler = nil
                     errPipe.fileHandleForReading.readabilityHandler = nil
                     let restOut = outPipe.fileHandleForReading.readDataToEndOfFile()
@@ -210,6 +228,7 @@ enum Runner {
                     process.qualityOfService = .userInitiated
                     try process.run()
                     group?.register(process.processIdentifier)
+                    Children.add(process.processIdentifier)
                     if Task.isCancelled {
                         process.terminate()
                         kill(process.processIdentifier, SIGCONT)

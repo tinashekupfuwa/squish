@@ -22,6 +22,16 @@ enum Brand {
             : NSColor(srgbRed: 0x66 / 255, green: 0x66 / 255, blue: 0x66 / 255, alpha: 1)
     })
     static let green = Color(red: 0.20, green: 0.74, blue: 0.42)
+    /// Green and amber for text: the meter colors fail AA contrast as small text on light cards, so text gets darker shades there.
+    static let greenText = adaptive(light: (0x15, 0x7A, 0x3E), dark: (0x4A, 0xDE, 0x80))
+    static let amberText = adaptive(light: (0x8F, 0x5E, 0x00), dark: (0xF5, 0xAD, 0x29))
+
+    private static func adaptive(light: (Int, Int, Int), dark: (Int, Int, Int)) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let c = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: CGFloat(c.0) / 255, green: CGFloat(c.1) / 255, blue: CGFloat(c.2) / 255, alpha: 1)
+        })
+    }
 
     /// Linear blend between two colors in sRGB, t in 0...1.
     static func mix(_ a: Color, _ b: Color, _ t: Double) -> Color {
@@ -299,7 +309,7 @@ struct DestinationSection: View {
                     Spacer()
                     if !outputFolder.isEmpty {
                         Button { Finder.open(URL(fileURLWithPath: outputFolder)) } label: { Image(systemName: "arrow.up.forward.square") }
-                            .buttonStyle(.borderless).help("Open in Finder")
+                            .buttonStyle(.plain).foregroundStyle(.secondary).help("Open in Finder").accessibilityLabel("Open the output folder in Finder")
                     }
                     Button("Choose…") { if let url = Panels.chooseFolder() { outputFolder = url.path } }
                 }
@@ -385,12 +395,13 @@ struct QualityRuler: View {
             VStack(spacing: 2) {
                 HStack(spacing: trackGap) {
                     Color.clear.frame(width: numberWidth, height: 1)
-                    ZStack {
-                        presetButton("Light", 20, alignment: .leading)
-                        presetButton("Balanced", 50, alignment: .center)
-                        presetButton("Strong", 80, alignment: .trailing)
+                    GeometryReader { geo in
+                        ForEach(presets, id: \.0) { name, target in
+                            presetButton(name, target)
+                                .fixedSize()
+                                .position(x: trackX(CGFloat(target), width: geo.size.width), y: 11)
+                        }
                     }
-                    .frame(maxWidth: .infinity)
                     Color.clear.frame(width: resetWidth, height: 1)
                 }
                 .frame(height: 22)
@@ -486,15 +497,16 @@ struct QualityRuler: View {
         compression < 35 ? "Light" : compression <= 65 ? "Balanced" : "Strong"
     }
 
-    private func presetButton(_ name: String, _ target: Int, alignment: Alignment) -> some View {
+    private func presetButton(_ name: String, _ target: Int) -> some View {
         let selected = presetName == name
         return Button {
             withAnimation(.spring(response: 0.3)) { quality = 100 - target }
         } label: {
             Text(name)
-                .font(.callout.weight(selected ? .semibold : .regular))
+                .font(.subheadline.weight(selected ? .semibold : .regular))
                 .foregroundStyle(selected ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-                .frame(maxWidth: .infinity, alignment: alignment)
+                .padding(.vertical, 3)
+                .contentShape(Rectangle())
                 .animation(.easeOut(duration: 0.2), value: selected)
         }
         .buttonStyle(.plain)

@@ -75,7 +75,7 @@ struct CompressView: View {
                     VStack(spacing: 8) {
                         Image(systemName: "tray").font(.system(size: 30)).foregroundStyle(.secondary)
                         Text("No videos yet").font(.headline).foregroundStyle(.secondary)
-                        Text("Each video becomes a WebM and an MP4 that together play in every modern browser. Squish checks every file it makes, and your originals are never changed.")
+                        Text("Start will make: \(model.settings.planLine). Squish checks every file it makes, and your originals are never changed.")
                             .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
                     }
                     .transition(.opacity)
@@ -161,9 +161,9 @@ struct CompressView: View {
         let queued = model.pending.count
         if model.isStopping { return "Stopping…" }
         if model.isPaused { return "Paused · \(done) of \(model.jobs.count) done" }
-        if model.isRunning { return "Converting · \(done) of \(model.jobs.count) done" }
+        if model.isRunning { return "Compressing · \(done) of \(model.jobs.count) done" }
         if model.jobs.isEmpty { return "No videos queued" }
-        return queued == 0 ? "All \(done) done" : "\(queued) ready to convert" + (done > 0 ? " · \(done) done" : "")
+        return queued == 0 ? "All \(done) done" : "\(queued) ready to compress" + (done > 0 ? " · \(done) done" : "")
     }
 }
 
@@ -189,15 +189,15 @@ struct JobRow: View {
                 Spacer()
                 Text(paused ? "Paused" : job.status).font(.caption).foregroundStyle(.secondary).contentTransition(.opacity)
                 if job.state != .running {
-                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
-                        .buttonStyle(.borderless).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
+                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
                 }
             }
             if job.state == .running {
                 HStack(spacing: 10) {
                     MiniTickBar(value: job.progress, paused: paused)
                     if let speed = job.speed, !paused {
-                        Text(Fmt.speed(speed)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
+                        Text(job.secondsLeft.map { "\(Fmt.speed(speed)) · \(Fmt.timeLeft($0))" } ?? Fmt.speed(speed)).font(.caption.monospacedDigit()).foregroundStyle(.secondary).fixedSize()
                             .contentTransition(.numericText())
                     }
                     Text("\(Int((job.progress * 100).rounded()))%").font(.caption.monospacedDigit()).foregroundStyle(.secondary).frame(width: 36, alignment: .trailing)
@@ -216,9 +216,10 @@ struct JobRow: View {
                             Text(output.url.lastPathComponent).lineLimit(1).truncationMode(.middle).foregroundStyle(.secondary)
                             Text("\(Fmt.bytes(output.sourceBytes)) → \(Fmt.bytes(output.bytes))").monospacedDigit().fixedSize()
                             Text(output.sourceBytes > 0 ? String(format: "%+.0f%%", (Double(output.bytes) / Double(output.sourceBytes) - 1) * 100) : "–")
-                                .foregroundStyle(output.bytes < output.sourceBytes ? Brand.green : Brand.amber).monospacedDigit().fixedSize()
+                                .foregroundStyle(output.bytes < output.sourceBytes ? Brand.greenText : Brand.amberText).monospacedDigit().fixedSize()
                             Image(systemName: output.verification.passed ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                                .foregroundStyle(output.verification.passed ? .green : .orange)
+                                .foregroundStyle(output.verification.passed ? Brand.green : Brand.amber)
+                                .accessibilityLabel(output.verification.passed ? "Checked, plays correctly" : "Check found a problem")
                                 .help((output.verification.checks + output.verification.issues).joined(separator: "\n"))
                             Button("Show") { Finder.reveal([output.url]) }.buttonStyle(.link)
                         }
@@ -230,7 +231,7 @@ struct JobRow: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(job.outputs) { output in
                             Text("\(output.codec.label): \(output.verification.checks.joined(separator: ", "))\(output.verification.issues.isEmpty ? "" : " — issues: " + output.verification.issues.joined(separator: "; "))")
-                                .font(.caption).foregroundStyle(output.verification.passed ? Color.secondary : Color.orange)
+                                .font(.caption).foregroundStyle(output.verification.passed ? Color.secondary : Brand.amberText)
                             CodeBlock(text: output.command)
                         }
                         if let html = job.html {
@@ -244,7 +245,7 @@ struct JobRow: View {
             }
         }
         .padding(12)
-        .surfaceCard(tint: job.state == .running ? (paused ? .orange : .accentColor) : job.state == .failed ? .red : nil)
+        .surfaceCard(tint: job.state == .running ? (paused ? Brand.amber : Brand.orange) : job.state == .failed ? .red : nil)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.state)
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: job.outputs.count)
     }
@@ -261,11 +262,11 @@ struct JobRow: View {
     }
 
     private var color: Color {
-        if paused { return .orange }
+        if paused { return Brand.amber }
         switch job.state {
-        case .done: return .green
+        case .done: return Brand.green
         case .failed: return .red
-        case .running: return .accentColor
+        case .running: return Brand.orange
         default: return .secondary
         }
     }

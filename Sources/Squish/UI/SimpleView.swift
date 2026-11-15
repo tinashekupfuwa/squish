@@ -28,11 +28,6 @@ struct QueueStatus: View {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
-            if model.isRunning {
-                Text("This Mac stays awake until the conversion finishes.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             if model.hasLargeVideo {
                 TickBar(value: finished ? 1 : model.displayProgress, paused: model.isPaused || model.isStopping, running: model.isRunning, done: finished, tint: Brand.green, tickWidth: 2, spacing: 2.5, height: 30)
             } else {
@@ -43,6 +38,11 @@ struct QueueStatus: View {
                     paused: model.isPaused || model.isStopping,
                     done: finished
                 )
+            }
+            if model.isRunning {
+                Label("Keeping this Mac awake until it finishes", systemImage: "cup.and.saucer.fill")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -70,7 +70,7 @@ struct QueueStatus: View {
         if model.jobs.isEmpty { return "Ready" }
         return "\(model.pending.count) waiting"
     }
-    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amber : model.isRunning ? Brand.statusGrey : finished ? (shrink < -0.005 ? Brand.amber : Brand.green) : .primary }
+    private var headlineColor: Color { model.isStopping ? .red : model.isPaused ? Brand.amberText : model.isRunning ? Brand.statusGrey : finished ? (shrink < -0.005 ? Brand.amberText : Brand.greenText) : .primary }
 
     private var detail: String {
         if let job = model.currentJob { return "\(job.url.lastPathComponent) · \(model.doneJobs.count + 1) of \(model.jobs.count)" }
@@ -102,6 +102,21 @@ struct SimpleView: View {
 
             queue
 
+            if model.isRunning {
+                Label {
+                    Text("Compression \(100 - model.quality) · \(model.settings.planLine)").lineLimit(2)
+                } icon: {
+                    Image(systemName: "lock.fill")
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .surfaceCard(cornerRadius: Radius.row)
+                .help("Settings are locked while videos are compressing. Stop to change them.")
+                .accessibilityLabel("Settings locked while compressing. Compression \(100 - model.quality), \(model.settings.planLine)")
+            } else {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     CapsLabel("Compression")
@@ -135,7 +150,7 @@ struct SimpleView: View {
                         .padding(.horizontal, 4)
                 }
             }
-            .disabled(model.isRunning)
+            }
 
             controls
 
@@ -254,10 +269,11 @@ struct SimpleJobRow: View {
     @State private var hovering = false
 
     private var speedLine: String {
-        if stopping { return "Stopping…" }
+        if stopping { return "Discarding the unfinished file" }
         if paused { return "Paused" }
         guard let speed = job.speed else { return "Measuring speed…" }
-        return Fmt.speed(speed)
+        guard let left = job.secondsLeft else { return Fmt.speed(speed) }
+        return "\(Fmt.speed(speed)) · \(Fmt.timeLeft(left))"
     }
 
     var body: some View {
@@ -304,7 +320,7 @@ struct SimpleJobRow: View {
             HStack(spacing: 6) {
                 Text(grew ? "+\(Int((abs(ratio) * 100).rounded()))%" : ratio < 0.005 ? "same" : "−\(Int((ratio * 100).rounded()))%")
                     .font(.caption.weight(.semibold).monospacedDigit())
-                    .foregroundStyle(grew ? Brand.amber : ratio < 0.005 ? Color.secondary : Brand.green)
+                    .foregroundStyle(grew ? Brand.amberText : ratio < 0.005 ? Color.secondary : Brand.greenText)
                     .padding(.horizontal, 7).padding(.vertical, 3)
                     .background(Capsule().fill((grew ? Brand.amber : Brand.green).opacity(ratio < 0.005 && !grew ? 0.08 : 0.15)))
                 Button { Finder.reveal(job.outputs.map(\.url)) } label: { Image(systemName: "magnifyingglass") }

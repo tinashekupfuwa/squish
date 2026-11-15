@@ -28,6 +28,15 @@ final class CompressJob: Identifiable {
     }
 
     var bytes: Int64 { probe?.bytes ?? fileBytes }
+
+    /// How many output files this job is making, so the time left covers all of them.
+    var plannedOutputs = 1
+
+    /// Estimated seconds until this video finishes, from ffmpeg's live speed. Nil until there is enough to go on.
+    var secondsLeft: Double? {
+        guard state == .running, let speed, speed > 0, let duration = probe?.duration, duration > 0, progress > 0.005 else { return nil }
+        return duration * Double(plannedOutputs) * (1 - progress) / speed
+    }
 }
 
 @Observable @MainActor
@@ -202,6 +211,13 @@ final class CompressModel {
                     await process(job, settings)
                 }
             }
+            if !Task.isCancelled, !isStopping, !doneJobs.isEmpty {
+                let failed = jobs.filter { $0.state == .failed }.count
+                Completion.announce(
+                    title: failed == 0 ? "Squish finished" : "Squish finished with \(failed) failed",
+                    body: "\(doneJobs.count) video\(doneJobs.count == 1 ? "" : "s") compressed. \(savedBytes > 0 ? "Saved \(Fmt.bytes(savedBytes))." : "")"
+                )
+            }
             isRunning = false
             isPaused = false
             isStopping = false
@@ -268,6 +284,7 @@ final class CompressModel {
             let stem = job.url.deletingPathExtension().lastPathComponent
             let expected = Filters.outputSize(probe, maxWidth: s.maxWidth)
             let count = Double(codecs.count)
+            job.plannedOutputs = codecs.count
             for (i, codec) in codecs.enumerated() {
                 let output = OutputLocation.unique(dir.appendingPathComponent("\(stem)-\(codec.rawValue).\(codec.fileExtension)"))
                 job.status = "Encoding \(codec.shortLabel) (\(i + 1)/\(codecs.count))…"

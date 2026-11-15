@@ -52,8 +52,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// A running conversion keeps the Mac from sleeping, and from shutting down out from under it.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        StayAwake.isHeld ? .terminateCancel : .terminateNow
+        guard StayAwake.isHeld else { return .terminateNow }
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "A video is still compressing"
+        alert.informativeText = "If you quit now, the video in progress is discarded and starts over next time. Finished videos are kept."
+        alert.addButton(withTitle: "Keep Compressing")
+        alert.addButton(withTitle: "Stop and Quit").hasDestructiveAction = true
+        guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        MainActor.assumeIsolated { AppState.shared.stopEverything() }
+        Task { @MainActor in
+            var waited = 0
+            while StayAwake.isHeld, waited < 50 {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+                waited += 1
+            }
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
+
+    /// Whatever the route out, no encoder is left running without the app.
+    func applicationWillTerminate(_ notification: Notification) { Children.terminateAll() }
 
     /// Files dropped on the Dock icon or opened with Squish join the queue.
     func application(_ application: NSApplication, open urls: [URL]) {
@@ -99,6 +120,13 @@ final class AppState {
     let compare = CompareModel()
     let audit = AuditModel()
     let optimize = OptimizeModel()
+
+    func stopEverything() {
+        compress.stop()
+        compare.cancel()
+        audit.cancel()
+        optimize.cancel()
+    }
 
     /// Routes dropped or opened files: the compare screen takes one video, everything else queues for compression.
     func receive(_ urls: [URL], fromWindow: Bool) {
@@ -283,13 +311,13 @@ struct MissingToolsBanner: View {
     let recheck: () -> Void
     var body: some View {
         HStack {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Brand.amber)
             Text("Squish needs FFmpeg, a free video tool. Install it with `brew install ffmpeg` in Terminal, or set its location in Settings.").font(.callout)
             Spacer()
             Button("Check again", action: recheck).controlButton()
         }
         .padding(10)
-        .background(.orange.opacity(0.12))
+        .background(Brand.amber.opacity(0.12))
     }
 }
 

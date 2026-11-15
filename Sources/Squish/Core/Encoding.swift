@@ -15,7 +15,7 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
     var audience: String {
         switch self {
         case .vp9: return "Chrome, Firefox, Edge"
-        case .h265: return "Mac, QuickTime, newer iPhones"
+        case .h265: return "Mac, iPhone, Apple TV"
         case .av1: return "Smallest; slow to make"
         }
     }
