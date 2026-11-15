@@ -240,9 +240,13 @@ enum Runner {
                 }
             }
         } onCancel: {
-            if process.isRunning {
-                process.terminate()
-                kill(process.processIdentifier, SIGCONT)
+            guard process.isRunning else { return }
+            let pid = process.processIdentifier
+            process.terminate()
+            kill(pid, SIGCONT)
+            // A cancelled encode's file is discarded, so don't wait while a slow encoder flushes its queued frames.
+            DispatchQueue.global().asyncAfter(deadline: .now() + 2) {
+                if process.isRunning { kill(pid, SIGKILL) }
             }
         }
     }

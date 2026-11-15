@@ -56,7 +56,7 @@ enum Codec: String, CaseIterable, Identifiable, Codable, Hashable, Sendable {
             let profile = pixFmt == "p210le" ? "main42210" : pixFmt == "p010le" ? "main10" : "main"
             // Matched to x265 on real 4K60 4:2:2 camera footage: CRF 30 and quality 45 both score about VMAF 82.
             let quality = min(100, max(1, Int((45 + Double(30 - crf) * 1.6).rounded())))
-            return ["-c:v", "hevc_videotoolbox", "-profile:v", profile, "-q:v", "\(quality)", "-allow_sw", "0", "-prio_speed", "0", "-tag:v", "hvc1", "-movflags", "faststart", "-pix_fmt", pixFmt]
+            return ["-c:v", "hevc_videotoolbox", "-profile:v", profile, "-q:v", "\(quality)", "-allow_sw", "0", "-prio_speed", "1", "-tag:v", "hvc1", "-movflags", "faststart", "-pix_fmt", pixFmt]
         case (_, .hardware):
             return videoFlags(crf: crf, pixFmt: pixFmt, speed: .faster)
         }
@@ -291,6 +291,22 @@ struct EncodeOutput: Identifiable, Sendable {
     let verification: Verification
 }
 
+/// Video frames written per second, measured over the last 20 seconds, so the speed shown is the speed now.
+final class RateMeter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var samples: [(time: Double, frame: Double)] = []
+
+    func add(frame: Double) -> Double? {
+        lock.lock()
+        defer { lock.unlock() }
+        let now = ProcessInfo.processInfo.systemUptime
+        samples.append((now, frame))
+        while samples.count > 2, now - samples[0].time > 20 { samples.removeFirst() }
+        guard now - samples[0].time >= 3 else { return nil }
+        return (frame - samples[0].frame) / (now - samples[0].time)
+    }
+}
+
 enum Encoder {
     static func decideAudio(input: String, probe: ProbeInfo, mode: AudioMode) async throws -> AudioDecision {
         switch mode {
@@ -347,22 +363,33 @@ enum Encoder {
     /// Runs one encode and returns the command line that produced it.
     static func encode(input: String, probe: ProbeInfo, codec: Codec, crf: Int, settings: EncodeSettings, keepAudio: Bool, maxWidth: Int?, output: URL, speed: (@Sendable (Double) -> Void)? = nil, progress: @escaping @Sendable (Double) -> Void) async throws -> String {
         let args = arguments(input: input, probe: probe, codec: codec, crf: crf, settings: settings, keepAudio: keepAudio, maxWidth: maxWidth, output: output)
+        let fps = Filters.targetFPS(probe, mode: settings.frameRate)?.value
         do {
-            try await runWithProgress(args, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
+            try await runWithProgress(args, duration: probe.duration, fps: fps, progress: progress, speed: speed, cleanup: output)
             return Runner.commandLine("ffmpeg", args)
         } catch where settings.speed == .hardware && !(error is CancellationError) && !Task.isCancelled {
             // Older Macs have no hardware encoder for some formats (10-bit 4:2:2 needs Apple silicon), so use the software one.
             var software = settings
             software.speed = .faster
             let fallback = arguments(input: input, probe: probe, codec: codec, crf: crf, settings: software, keepAudio: keepAudio, maxWidth: maxWidth, output: output)
-            try await runWithProgress(fallback, duration: probe.duration, progress: progress, speed: speed, cleanup: output)
+            try await runWithProgress(fallback, duration: probe.duration, fps: fps, progress: progress, speed: speed, cleanup: output)
             return Runner.commandLine("ffmpeg", fallback)
         }
     }
 
-    static func runWithProgress(_ args: [String], duration: Double, progress: @escaping @Sendable (Double) -> Void, speed: (@Sendable (Double) -> Void)? = nil, cleanup: URL?) async throws {
+    /// Progress and speed come from the count of video frames written when the frame rate is known. ffmpeg's own
+    /// `speed=` and `out_time=` follow whichever stream is furthest along, and audio runs far ahead of video at the
+    /// start, so they read several times too fast for the first minutes and then appear to slow down.
+    static func runWithProgress(_ args: [String], duration: Double, fps: Double? = nil, progress: @escaping @Sendable (Double) -> Void, speed: (@Sendable (Double) -> Void)? = nil, cleanup: URL?) async throws {
+        let meter = RateMeter()
         do {
             _ = try await Runner.checked(try Tools.ffmpeg(), ["-progress", "pipe:1", "-nostats"] + args, keepStdout: false, onStdoutLine: { line in
+                if let fps, fps > 0 {
+                    guard line.hasPrefix("frame="), let frame = Double(line.dropFirst("frame=".count).trimmingCharacters(in: .whitespaces)) else { return }
+                    if duration > 0 { progress(min(1, max(0, frame / fps / duration))) }
+                    if let speed, let rate = meter.add(frame: frame), rate > 0 { speed(rate / fps) }
+                    return
+                }
                 if line.hasPrefix("speed="), let speed {
                     let raw = line.dropFirst("speed=".count).trimmingCharacters(in: .whitespaces)
                     if raw.hasSuffix("x"), let x = Double(raw.dropLast()), x > 0 { speed(x) }

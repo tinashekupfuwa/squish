@@ -256,6 +256,7 @@ struct SimpleJobRow: View {
 
     private var speedLine: String {
         if stopping { return "Discarding the unfinished file" }
+        if job.status == "Cancelling…" { return "Cancelling…" }
         if paused { return "Paused" }
         guard let speed = job.speed else { return "Measuring speed…" }
         guard let left = job.secondsLeft else { return Fmt.speed(speed) }
