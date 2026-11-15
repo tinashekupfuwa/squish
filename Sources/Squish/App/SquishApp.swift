@@ -26,6 +26,9 @@ struct SquishApp: App {
                 Divider()
                 Toggle("Glass Look", isOn: $glassUI)
             }
+            CommandGroup(before: .windowList) {
+                Button("Show Squish Window") { MainWindow.show() }.keyboardShortcut("0")
+            }
         }
 
         MenuBarExtra(isInserted: $showMenuBarIcon) {
@@ -42,13 +45,29 @@ struct SquishApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Always start with the window, even if it was closed when Squish last quit.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UserDefaults.standard.set(false, forKey: "NSQuitAlwaysKeepsWindows")
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            MainActor.assumeIsolated { if MainWindow.current == nil { MainWindow.show() } }
+        }
     }
 
-    /// Keep running in the menu bar after the window closes.
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    /// Clicking the Dock icon brings the window back, whether it was minimized or closed.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        MainActor.assumeIsolated { MainWindow.show() }
+        return false
+    }
+
+    /// Closing the window keeps Squish in the menu bar. Without the menu bar icon there would be no way back, so it quits.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !(UserDefaults.standard.object(forKey: "showMenuBarIcon") as? Bool ?? true) && !StayAwake.isHeld
+    }
 
     /// A running conversion keeps the Mac from sleeping, and from shutting down out from under it.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -57,10 +76,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "A video is still compressing"
-        alert.informativeText = "If you quit now, the video in progress is discarded and starts over next time. Finished videos are kept."
-        alert.addButton(withTitle: "Keep Compressing")
+        alert.informativeText = "Minimize keeps it compressing in the Dock. If you quit, the video in progress is discarded and starts over next time. Finished videos are kept."
+        alert.addButton(withTitle: "Minimize")
         alert.addButton(withTitle: "Stop and Quit").hasDestructiveAction = true
-        guard alert.runModal() == .alertSecondButtonReturn else { return .terminateCancel }
+        alert.addButton(withTitle: "Cancel")
+        let choice = alert.runModal()
+        if choice == .alertFirstButtonReturn { MainActor.assumeIsolated { MainWindow.current?.miniaturize(nil) } }
+        guard choice == .alertSecondButtonReturn else { return .terminateCancel }
         MainActor.assumeIsolated { AppState.shared.stopEverything() }
         Task { @MainActor in
             var waited = 0
@@ -79,6 +101,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Files dropped on the Dock icon or opened with Squish join the queue.
     func application(_ application: NSApplication, open urls: [URL]) {
         MainActor.assumeIsolated { AppState.shared.receive(urls, fromWindow: false) }
+    }
+}
+
+/// The one main window: finds it, and brings it back when it was minimized or closed.
+@MainActor
+enum MainWindow {
+    /// Set by the views, which are the only place SwiftUI hands out the action that opens a window.
+    static var open: (() -> Void)?
+
+    static var current: NSWindow? {
+        NSApp.windows.first { $0.identifier?.rawValue.hasPrefix("main") == true }
+    }
+
+    static func show() {
+        NSApp.activate(ignoringOtherApps: true)
+        guard let window = current else {
+            open?()
+            return
+        }
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
     }
 }
 
@@ -142,6 +185,7 @@ final class AppState {
 
 struct RootView: View {
     @Environment(AppState.self) private var state
+    @Environment(\.openWindow) private var openWindow
     @AppStorage("uiMode") private var mode = "simple"
     @State private var dropTargeted = false
 
@@ -171,6 +215,7 @@ struct RootView: View {
             }
         }
         .modifier(GlassWindow())
+        .onAppear { MainWindow.open = { openWindow(id: "main") } }
         .dropDestination(for: URL.self) { urls, _ in
             state.receive(urls, fromWindow: true)
             return !urls.isEmpty

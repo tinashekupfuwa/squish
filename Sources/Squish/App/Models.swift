@@ -146,6 +146,8 @@ final class CompressModel {
     }
     private let control = ProcessGroup()
     private var task: Task<Void, Never>?
+    /// The video being compressed runs in its own task, so it can be cancelled without stopping the queue.
+    private var currentEncode: Task<Void, Never>?
 
     static let videoExtensions: Set<String> = ["mp4", "mov", "m4v", "webm", "mkv", "avi", "ogv", "mpg", "mpeg", "mts", "m2ts", "wmv", "flv", "3gp", "gif"]
 
@@ -164,9 +166,14 @@ final class CompressModel {
         }
     }
 
+    /// Removes a waiting or finished video. For the one being compressed, cancels just that video and moves on to the next.
     func remove(_ job: CompressJob) {
-        guard job.state != .running else { return }
-        jobs.removeAll { $0.id == job.id }
+        guard job.state == .running else {
+            jobs.removeAll { $0.id == job.id }
+            return
+        }
+        job.status = "Cancelling…"
+        currentEncode?.cancel()
     }
 
     func clearFinished() { jobs.removeAll { $0.state == .done } }
@@ -181,7 +188,7 @@ final class CompressModel {
     /// Overall progress for the big meter: by size when a large video is queued, otherwise per video.
     var displayProgress: Double {
         guard hasLargeVideo else { return overallProgress }
-        let active = jobs.filter { $0.state != .failed && $0.state != .cancelled }
+        let active = jobs.filter { $0.state != .failed }
         let total = active.reduce(0.0) { $0 + Double($1.bytes) }
         guard total > 0 else { return overallProgress }
         return active.reduce(0.0) { $0 + Double($1.bytes) * ($1.state == .done ? 1 : $1.progress) } / total
@@ -189,7 +196,7 @@ final class CompressModel {
 
     /// Progress across the jobs that are queued, running, or finished.
     var overallProgress: Double {
-        let active = jobs.filter { $0.state != .failed && $0.state != .cancelled }
+        let active = jobs.filter { $0.state != .failed }
         guard !active.isEmpty else { return 0 }
         return active.reduce(0) { $0 + ($1.state == .done ? 1 : $1.progress) } / Double(active.count)
     }
@@ -208,7 +215,10 @@ final class CompressModel {
                 while !Task.isCancelled, let job = jobs.first(where: { $0.state == .queued }) {
                     try? await control.waitWhilePaused()
                     if Task.isCancelled { break }
-                    await process(job, settings)
+                    let encode = Task { await process(job, settings) }
+                    currentEncode = encode
+                    await withTaskCancellationHandler { await encode.value } onCancel: { encode.cancel() }
+                    currentEncode = nil
                 }
             }
             if !Task.isCancelled, !isStopping, !doneJobs.isEmpty {

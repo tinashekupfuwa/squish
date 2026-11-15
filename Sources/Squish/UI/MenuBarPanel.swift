@@ -2,8 +2,13 @@ import SwiftUI
 
 struct MenuBarLabel: View {
     let model: CompressModel
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        content.onAppear { if MainWindow.open == nil { MainWindow.open = { openWindow(id: "main") } } }
+    }
+
+    @ViewBuilder private var content: some View {
         if model.isRunning {
             HStack(spacing: 3) {
                 Image(systemName: model.isPaused ? "pause.circle.fill" : "arrow.down.right.and.arrow.up.left.circle.fill")
@@ -64,8 +69,8 @@ struct MenuBarPanel: View {
             }
 
             Button {
-                openWindow(id: "main")
-                NSApp.activate(ignoringOtherApps: true)
+                MainWindow.open = { openWindow(id: "main") }
+                MainWindow.show()
             } label: { Text("Open Squish") }
             .buttonStyle(PanelButtonStyle())
 

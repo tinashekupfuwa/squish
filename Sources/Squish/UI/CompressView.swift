@@ -188,10 +188,10 @@ struct JobRow: View {
                 }
                 Spacer()
                 Text(paused ? "Paused" : job.status).font(.caption).foregroundStyle(.secondary).contentTransition(.opacity)
-                if job.state != .running {
-                    Button(action: onRemove) { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary).help("Remove from list").accessibilityLabel("Remove \(job.url.lastPathComponent)")
-                }
+                Button(action: onRemove) { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .help(job.state == .running ? "Cancel this video and go on to the next" : "Remove from list")
+                    .accessibilityLabel("\(job.state == .running ? "Cancel" : "Remove") \(job.url.lastPathComponent)")
             }
             if job.state == .running {
                 HStack(spacing: 10) {

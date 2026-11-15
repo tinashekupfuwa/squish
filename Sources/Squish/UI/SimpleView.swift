@@ -313,7 +313,12 @@ struct SimpleJobRow: View {
         if stopping {
             Text("Stopping…").font(.caption.weight(.semibold)).foregroundStyle(.red)
         } else if job.state == .running {
-            Text("\(Int((job.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
+            HStack(spacing: 8) {
+                Text("\(Int((job.progress * 100).rounded()))%").font(.callout.monospacedDigit()).foregroundStyle(.secondary).contentTransition(.numericText())
+                Button(action: remove) { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .help("Cancel this video and go on to the next").accessibilityLabel("Cancel \(job.url.lastPathComponent)")
+            }
         } else if job.state == .done, let smallest = job.outputs.map(\.bytes).min(), let source = job.outputs.first?.sourceBytes, source > 0 {
             let ratio = 1 - Double(smallest) / Double(source)
             let grew = ratio < -0.005
